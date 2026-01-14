@@ -1,0 +1,103 @@
+# LibreChat Configuration File
+# Version: 1.2.1
+version: 1.2.1
+
+# Enable caching for better performance
+cache: true
+
+# Interface Configuration
+interface:
+  # Enable Agents functionality
+  agents: true
+  
+  # MCP Servers UI controls
+  mcpServers:
+    use: true        # Allow users to use MCP servers
+    create: false    # Disable user creation of MCP servers
+    share: false     # Disable sharing of MCP servers
+  
+  # Hide unnecessary UI elements
+  sidePanel: false
+  modelSelect: true
+  presets: false
+  parameters: false
+  bookmarks: false
+  prompts: false
+  multiConvo: false
+  memories: false
+
+
+# MCP Server Configuration
+mcpServers:
+  # Stock Market Data MCP Server
+  stock-mcp:
+    type: streamable-http
+    url: "http://localhost:9898/mcp"
+    timeout: 60000  # 60 seconds timeout for operations
+    serverInstructions: |
+      This MCP server provides US and Hong Kong stock market data queries.
+      - Specify stock ticker symbols clearly
+      - Supports real-time price queries and historical data
+      - Use proper ticker formats (e.g., AAPL for Apple, 0700.HK for Tencent)
+
+# MCP Security Settings
+mcpSettings:
+  allowedDomains:
+    - 'localhost'
+    - '127.0.0.1'
+
+# Endpoint Configuration
+endpoints:
+  # Agent Configuration
+  agents:
+    # Recursion limits for agent loops
+    recursionLimit: 25
+    maxRecursionLimit: 50
+    
+    # Citation settings
+    maxCitations: 30
+    maxCitationsPerFile: 7
+    minRelevanceScore: 0.45
+    
+    # Available capabilities for all users
+    capabilities:
+      - "execute_code"
+      - "file_search"
+      - "actions"
+      - "tools"
+    
+    # Disable Agent Builder
+    disableBuilder: true
+  
+  # Custom Endpoints (OpenAI-compatible APIs)
+  custom:
+    # Qwen API Configuration (通义千问)
+    - name: 'qwen'
+      apiKey: '${OPENAI_API_KEY}'
+      baseURL: 'https://openapi.dp.tech/openapi/v1'
+      
+      # Model configuration - manually specified
+      # fetch: false prevents calling /models endpoint (which returns 404)
+      models:
+        default:
+          - 'qwen3-max'
+          - 'qwen-plus'
+          - 'qwen3-coder-plus'
+        fetch: false  # Critical: Disable auto-fetch to avoid 404 errors
+      
+      # Conversation title generation
+      titleConvo: true
+      titleModel: 'qwen-plus'
+      
+      # Model display label in UI
+      modelDisplayLabel: '通义千问'
+      
+      # Drop unsupported parameters to avoid API errors
+      dropParams: ['stop', 'user']
+
+# Action Security - Domain whitelist for agent actions
+actions:
+  allowedDomains:
+    - 'swapi.dev'
+    - 'librechat.ai'
+    - 'google.com'
