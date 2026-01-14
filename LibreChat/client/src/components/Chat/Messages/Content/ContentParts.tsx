@@ -15,6 +15,45 @@ import Sources from '~/components/Web/Sources';
 import Container from './Container';
 import Part from './Part';
 
+/**
+ * Checks if a tool_call part has valid (non-truncated) args.
+ * This filters out incomplete tool_call parts from streaming APIs (e.g., Qwen)
+ * that may produce intermediate fragments with different IDs before the final complete call.
+ */
+const isValidToolCallPart = (part: TMessageContentParts): boolean => {
+  if (part.type !== ContentTypes.TOOL_CALL) {
+    return true; // Not a tool_call, always valid
+  }
+  const toolCall = part[ContentTypes.TOOL_CALL] as Agents.ToolCall | undefined;
+  if (!toolCall) {
+    return false;
+  }
+
+  // Only show completed tool_call entries with output or progress=1
+  // This filters out incomplete streaming states from APIs like Qwen
+  // Note: progress field exists at runtime but not in TypeScript definition
+  const toolCallWithProgress = toolCall as Agents.ToolCall & { progress?: number };
+  if (!toolCallWithProgress.output && toolCallWithProgress.progress !== 1) {
+    return false;
+  }
+
+  // If args is a string, check if it's valid JSON
+  if (typeof toolCall.args === 'string') {
+    const args = toolCall.args.trim();
+    if (args.length === 0) {
+      return false; // Empty args, likely incomplete
+    }
+    try {
+      JSON.parse(args);
+      return true; // Valid JSON
+    } catch {
+      return false; // Truncated/invalid JSON
+    }
+  }
+  // If args is already an object, it's valid
+  return true;
+};
+
 type ContentPartsProps = {
   content: Array<TMessageContentParts | undefined> | undefined;
   messageId: string;
@@ -29,9 +68,9 @@ type ContentPartsProps = {
   enterEdit?: (cancel?: boolean) => void | null | undefined;
   siblingIdx?: number;
   setSiblingIdx?:
-    | ((value: number) => void | React.Dispatch<React.SetStateAction<number>>)
-    | null
-    | undefined;
+  | ((value: number) => void | React.Dispatch<React.SetStateAction<number>>)
+  | null
+  | undefined;
 };
 
 /**
@@ -108,6 +147,17 @@ const ContentParts = memo(function ContentParts({
     return null;
   }
 
+  // Filter out incomplete tool_call parts with truncated JSON args
+  // This must happen before both sequential and parallel rendering paths
+  const filteredContent = useMemo(() => {
+    return content.map((part) => {
+      if (!part) {
+        return undefined;
+      }
+      return isValidToolCallPart(part) ? part : undefined;
+    });
+  }, [content]);
+
   // Edit mode: render editable text parts
   if (edit === true && enterEdit && setSiblingIdx) {
     return (
@@ -148,15 +198,15 @@ const ContentParts = memo(function ContentParts({
     );
   }
 
-  const showEmptyCursor = content.length === 0 && effectiveIsSubmitting;
-  const lastContentIdx = content.length - 1;
+  const showEmptyCursor = filteredContent.length === 0 && effectiveIsSubmitting;
+  const lastContentIdx = filteredContent.length - 1;
 
   // Parallel content: use dedicated renderer with columns (TMessageContentParts includes ContentMetadata)
-  const hasParallelContent = content.some((part) => part?.groupId != null);
+  const hasParallelContent = filteredContent.some((part) => part?.groupId != null);
   if (hasParallelContent) {
     return (
       <ParallelContentRenderer
-        content={content}
+        content={filteredContent}
         messageId={messageId}
         conversationId={conversationId}
         attachments={attachments}
@@ -169,7 +219,7 @@ const ContentParts = memo(function ContentParts({
 
   // Sequential content: render parts in order (90% of cases)
   const sequentialParts: PartWithIndex[] = [];
-  content.forEach((part, idx) => {
+  filteredContent.forEach((part, idx) => {
     if (part) {
       sequentialParts.push({ part, idx });
     }

@@ -64,6 +64,16 @@ export class MCPConnectionFactory {
       this.oauthEnd = oauth.oauthEnd;
       this.returnOnOAuth = oauth.returnOnOAuth;
     }
+
+    // 🔧 修复：在创建transport之前就注入X-User-Id到headers中
+    // 这确保了用户ID在connection建立时就被包含在HTTP请求头中
+    if (oauth?.user?.id) {
+      const existingHeaders = (this.serverConfig as t.StreamableHTTPOptions | t.SSEOptions).headers || {};
+      (this.serverConfig as t.StreamableHTTPOptions | t.SSEOptions).headers = {
+        ...existingHeaders,
+        'X-User-Id': oauth.user.id,
+      };
+    }
   }
 
   /** Creates the base MCP connection with OAuth tokens */

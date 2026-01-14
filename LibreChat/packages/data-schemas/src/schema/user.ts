@@ -157,6 +157,15 @@ const userSchema = new Schema<IUser>(
       type: String,
       sparse: true,
     },
+    /**
+     * Bohrium 用户 ID
+     * 用于关联 Bohrium 鉴权体系
+     */
+    bohriumId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
   },
   { timestamps: true },
 );

@@ -126,6 +126,7 @@ def create_mcp_server() -> FastMCP:
     from src.server.mcp.tools.filings_tools import register_filings_tools
     from src.server.mcp.tools.trade_tools import register_trade_tools
     from src.server.mcp.tools.chunking_tools import register_chunking_tools
+    from src.server.mcp.tools.system_tools import register_system_tools
 
     # Register core tools
     register_fundamental_tools(mcp)
@@ -152,6 +153,10 @@ def create_mcp_server() -> FastMCP:
 
     register_chunking_tools(mcp)
     logger.info("  ✓ Chunking tools registered (1 tool)")
+
+    # 注册系统工具 (数据读取)
+    register_system_tools(mcp)
+    logger.info("  ✓ System tools registered (1 tool)")
 
     logger.info("✅ MCP server created with all tools")
 

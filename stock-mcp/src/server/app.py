@@ -15,13 +15,46 @@ Architecture:
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from src.server.mcp.server import create_mcp_server
 from src.server.core.health import router as health_router
 from src.server.api.routes import market_data_router, filings_router
 from src.server.core.dependencies import Container
 from src.server.utils.logger import logger
+from src.server.utils.request_context import set_current_user_id, clear_current_user_id
+
+
+class UserIdMiddleware(BaseHTTPMiddleware):
+    """
+    X-User-Id 请求头提取中间件
+    
+    说明：
+    - 从HTTP请求头中提取 X-User-Id
+    - 存储到请求上下文变量中
+    - 使MCP工具可以访问当前用户ID进行文件存储隔离
+    """
+    async def dispatch(self, request: Request, call_next):
+        # 从请求头提取用户ID
+        user_id = request.headers.get('X-User-Id')
+        
+        # 🔍 调试：输出所有请求头
+        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] 请求路径: {request.url.path}")
+        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] 所有请求头: {dict(request.headers)}")
+        
+        if user_id:
+            set_current_user_id(user_id)
+            logger.info(f"[UserIdMiddleware] ✅ 成功设置用户ID: {user_id}")
+        else:
+            logger.warning(f"[UserIdMiddleware] ⚠️ 未找到X-User-Id请求头！")
+        
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            # 请求结束后清除上下文
+            clear_current_user_id()
 
 
 def create_app():
@@ -205,15 +238,25 @@ def create_app():
 
     logger.info("✅ CORS middleware configured")
 
+    # 4.1 Add UserIdMiddleware (提取X-User-Id请求头用于文件存储隔离)
+    app.add_middleware(UserIdMiddleware)
+    logger.info("✅ UserIdMiddleware configured (X-User-Id extraction)")
+
+
     # 5. Register RESTful API routes
     app.include_router(health_router, tags=["Health"])
     app.include_router(market_data_router, tags=["Market Data"])
     app.include_router(filings_router, prefix="/api/v1", tags=["Filings"])
+    
+    # 5.1 Register Files API router (数据集管理)
+    from src.server.api.routes.files import router as files_router
+    app.include_router(files_router, tags=["Files"])
 
     logger.info("✅ RESTful API routes registered")
     logger.info("   - Health check: /health")
     logger.info("   - Market data: /api/v1/market/*")
     logger.info("   - Filings: /api/v1/filings/*")
+    logger.info("   - Files: /api/v1/files/*")
 
     # 6. Mount MCP protocol endpoint
     if mcp_app:

@@ -17,7 +17,8 @@ const loadBaseConfig = async () => {
     adminIncluded: config.includedTools,
     directory: paths.structuredTools,
   });
-  return AppService({ config, paths, systemTools });
+  const appConfig = AppService({ config, paths, systemTools });
+  return appConfig;
 };
 
 /**
@@ -48,6 +49,9 @@ async function getAppConfig(options = {}) {
     if (!baseConfig) {
       throw new Error('Failed to initialize app configuration through AppService.');
     }
+
+    // 在缓存之前添加 enableBohriumAuth（重要！）
+    baseConfig.enableBohriumAuth = process.env.ENABLE_BOHRIUM_AUTH === 'true';
 
     if (baseConfig.availableTools) {
       await setCachedTools(baseConfig.availableTools);

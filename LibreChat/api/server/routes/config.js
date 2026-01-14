@@ -112,7 +112,11 @@ router.get('/', async function (req, res) {
       conversationImportMaxFileSize: process.env.CONVERSATION_IMPORT_MAX_FILE_SIZE_BYTES
         ? parseInt(process.env.CONVERSATION_IMPORT_MAX_FILE_SIZE_BYTES, 10)
         : 0,
+      enableBohriumAuth: appConfig.enableBohriumAuth,
     };
+
+    console.log('[DEBUG] appConfig.enableBohriumAuth =', appConfig.enableBohriumAuth);
+    console.log('[DEBUG] payload.enableBohriumAuth =', payload.enableBohriumAuth);
 
     const minPasswordLength = parseInt(process.env.MIN_PASSWORD_LENGTH, 10);
     if (minPasswordLength && !isNaN(minPasswordLength)) {

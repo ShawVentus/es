@@ -20,6 +20,7 @@ const { loginController } = require('~/server/controllers/auth/LoginController')
 const { getAppConfig } = require('~/server/services/Config');
 const middleware = require('~/server/middleware');
 const { Balance } = require('~/db/models');
+const { bohriumLoginController } = require('~/server/controllers/BohriumController');
 
 const setBalanceConfig = createSetBalanceConfig({
   getAppConfig,
@@ -40,6 +41,7 @@ router.post(
   setBalanceConfig,
   loginController,
 );
+router.post('/login-bohrium', middleware.logHeaders, setBalanceConfig, bohriumLoginController);
 router.post('/refresh', refreshController);
 router.post(
   '/register',

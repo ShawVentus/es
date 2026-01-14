@@ -1,0 +1,771 @@
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useRecoilValue } from 'recoil';
+import { toast } from 'react-hot-toast';
+import { useTheme, getThemeColors } from '../../hooks/useTheme';
+import Header from '../../components/common/Header';
+import { datasetFilesState, selectedDataForModelState } from '../../store/filesStore';
+import { getDatasetPreview, type DatasetPreview } from '../../api/dataset';
+
+interface ModelType {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  parameters: string[];
+}
+
+interface ColumnData {
+  name: string;
+  selected: boolean;
+  previewData: (string | number)[];
+}
+
+interface ImportedData {
+  dataId: string;
+  dataName: string;
+  category: string;
+  columns: ColumnData[];
+  dateColumn: string;
+}
+
+export default function ModelBuilding() {
+  const { theme, setTheme } = useTheme();
+  const colors = getThemeColors(theme);
+  const navigate = useNavigate();
+
+  // Recoil State
+  const datasetFiles = useRecoilValue(datasetFilesState);
+  const preSelectedData = useRecoilValue(selectedDataForModelState);
+
+  const [selectedDataId, setSelectedDataId] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [availableColumns, setAvailableColumns] = useState<ColumnData[]>([]);
+  const [loadingColumns, setLoadingColumns] = useState(false);
+  const [importedDataList, setImportedDataList] = useState<ImportedData[]>([]);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [isBuilding, setIsBuilding] = useState(false);
+
+  // Initialize with pre-selected data if available
+  useEffect(() => {
+    if (preSelectedData) {
+      handleDataSelect(preSelectedData.filename);
+    }
+    // Fallback to localStorage for refresh persistence (optional, keeping compatible with current flow)
+    else {
+      const savedDataStr = localStorage.getItem('selectedDataForModel');
+      if (savedDataStr) {
+        try {
+          const savedData = JSON.parse(savedDataStr);
+          // Note: savedData structure might vary, strictly we expect {id, ...} or {filename, ...}
+          const filename = savedData.filename || savedData.id;
+          if (filename) handleDataSelect(filename);
+          localStorage.removeItem('selectedDataForModel');
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, [preSelectedData]);
+
+  const itemsPerPage = 6;
+
+  const modelTypes: ModelType[] = [
+    {
+      id: 'arma',
+      name: 'ARMA模型',
+      description: '自回归移动平均模型，适用于平稳时间序列的建模与预测',
+      icon: 'ri-line-chart-line',
+      parameters: ['AR阶数(p)', 'MA阶数(q)', '常数项']
+    },
+    {
+      id: 'arima',
+      name: 'ARIMA模型',
+      description: '差分自回归移动平均模型，适用于非平稳序列',
+      icon: 'ri-arrow-up-down-line',
+      parameters: ['AR阶数(p)', '差分阶数(d)', 'MA阶数(q)']
+    },
+    {
+      id: 'arch',
+      name: 'ARCH模型',
+      description: '自回归条件异方差模型，波动率建模基础模型',
+      icon: 'ri-pulse-line',
+      parameters: ['ARCH阶数(q)', '分布假设']
+    },
+    {
+      id: 'garch',
+      name: 'GARCH模型',
+      description: '广义自回归条件异方差模型，用于波动率建模',
+      icon: 'ri-stock-line',
+      parameters: ['ARCH阶数(p)', 'GARCH阶数(q)', '分布类型']
+    },
+    {
+      id: 'var',
+      name: 'VAR模型',
+      description: '向量自回归模型，用于多变量时间序列分析',
+      icon: 'ri-git-branch-line',
+      parameters: ['滞后阶数', '变量选择', '趋势项']
+    },
+    {
+      id: 'vecm',
+      name: 'VECM模型',
+      description: '向量误差修正模型，用于协整关系分析',
+      icon: 'ri-links-line',
+      parameters: ['协整秩', '滞后阶数', '趋势设定']
+    }
+  ];
+
+  // Filter datasets
+  const filteredData = datasetFiles.filter(item =>
+    (item.filename || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (item.category || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const handleDataSelect = async (filename: string) => {
+    setSelectedDataId(filename);
+    setLoadingColumns(true);
+    setShowColumnSelector(true);
+    setAvailableColumns([]);
+
+    try {
+      const preview: DatasetPreview = await getDatasetPreview(filename);
+
+      // Transform preview columns to checkable columns
+      // backend returns columns array: ['Date', 'Open', ...]
+      // previewData needs to extract column data from head_rows
+
+      const newColumns: ColumnData[] = preview.columns.map((colName, colIndex) => {
+        // Extract first 5 rows for this column for preview
+        const colPreviewData = preview.head_rows.slice(0, 5).map(row => row[colIndex]);
+        const isDate = colName.toLowerCase().includes('date') || colName.toLowerCase().includes('time') || colName === '日期';
+
+        return {
+          name: colName,
+          selected: isDate, // Auto-select date column
+          previewData: colPreviewData
+        };
+      });
+
+      setAvailableColumns(newColumns);
+    } catch (err) {
+      console.error(err);
+      toast.error('无法加载数据列信息');
+      setShowColumnSelector(false);
+    } finally {
+      setLoadingColumns(false);
+    }
+  };
+
+  const handleColumnToggle = (columnName: string) => {
+    setAvailableColumns(prev => {
+      const updated = prev.map(col =>
+        col.name === columnName ? { ...col, selected: !col.selected } : col
+      );
+      // 确保除了日期外，最多只能选2个 (Keeping original logic limitation)
+      // Check if there is a 'Date' column marked
+      const dateCol = updated.find(c => c.name.toLowerCase().includes('date') || c.name === '日期');
+      const dateColName = dateCol ? dateCol.name : '';
+
+      const selectedCount = updated.filter(col => col.selected && col.name !== dateColName).length;
+      if (selectedCount > 2) {
+        toast('最多只能选择2个非日期列', { icon: '⚠️' });
+        return prev;
+      }
+      return updated;
+    });
+  };
+
+  const handleConfirmImport = () => {
+    const data = datasetFiles.find(d => d.filename === selectedDataId);
+    if (!data) return;
+
+    const selectedColumns = availableColumns.filter(col => col.selected);
+    if (selectedColumns.length === 0) {
+      toast.error('请至少选择一个数据列');
+      return;
+    }
+
+    const dateCol = availableColumns.find(c => (c.name.toLowerCase().includes('date') || c.name === '日期') && c.selected);
+
+    const newImportedData: ImportedData = {
+      dataId: data.filename,
+      dataName: data.filename,
+      category: data.category || 'Uncategorized',
+      columns: selectedColumns,
+      dateColumn: dateCol ? dateCol.name : (selectedColumns[0]?.name || '')
+    };
+
+    setImportedDataList(prev => [...prev, newImportedData]);
+    setShowColumnSelector(false);
+    setSelectedDataId('');
+    setAvailableColumns([]);
+    toast.success('数据导入成功');
+  };
+
+  const handleCancelImport = () => {
+    setShowColumnSelector(false);
+    setSelectedDataId('');
+    setAvailableColumns([]);
+  };
+
+  const handleStartBuilding = () => {
+    setIsBuilding(true);
+    // 模拟构建过程
+    setTimeout(() => {
+      setIsBuilding(false);
+      navigate('/report-analysis');
+      toast.success('模型构建开始');
+    }, 2000);
+  };
+
+  const getHighlightStyle = () => {
+    if (theme === 'light') {
+      return 'bg-gray-900 text-white';
+    } else if (theme === 'dark') {
+      return 'bg-white text-black';
+    } else {
+      return `bg-${colors.highlightBg} text-white`;
+    }
+  };
+
+  const getCheckIconColor = () => {
+    if (theme === 'light') {
+      return 'text-gray-900';
+    } else if (theme === 'dark') {
+      return 'text-white';
+    } else {
+      return `text-${colors.checkIcon}`;
+    }
+  };
+
+  const canStartBuilding = selectedModel && importedDataList.length > 0;
+
+  return (
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-black' : `bg-gradient-to-br ${colors.gradient}`}`}>
+      {/* Header */}
+      <Header />
+
+      {/* Main Content */}
+      <div className="px-6 py-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Page Header */}
+          <div className="mb-8">
+            <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-2`}>模型构建</h1>
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>选择数据和模型类型，配置参数并开始建模</p>
+          </div>
+
+          <div className="space-y-6">
+            {/* Row 1: 选择数据类 + 选择建模数据 */}
+            <div className="grid grid-cols-2 gap-6">
+              {/* 选择数据类 */}
+              <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                      <i className={`ri-database-2-line text-${colors.primaryText} text-xl`}></i>
+                    </div>
+                    <div>
+                      <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>选择数据类</h2>
+                      <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>从数据库中选择用于建模的数据</p>
+                    </div>
+                  </div>
+                  {/* 搜索按钮 */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      placeholder="搜索..."
+                      className={`w-40 pl-9 pr-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white placeholder-gray-500' : 'bg-white'}`}
+                    />
+                    <i className={`ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'} text-sm`}></i>
+                  </div>
+                </div>
+
+                {datasetFiles.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">
+                    <p>暂无数据，请先到"我的数据"获取</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {paginatedData.map((data) => (
+                      <div
+                        key={data.filename}
+                        onClick={() => handleDataSelect(data.filename)}
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedDataId === data.filename
+                          ? `${colors.selectedBorder} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`
+                          : `${colors.borderColor} ${theme === 'dark' ? 'hover:border-gray-600' : 'hover:border-gray-300'}`
+                          }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h3 className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} line-clamp-2 flex-1`}>{data.filename}</h3>
+                          {selectedDataId === data.filename && (
+                            <i className={`ri-checkbox-circle-fill ${getCheckIconColor()} text-lg flex-shrink-0`}></i>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-xs font-medium px-2 py-1 rounded ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} text-${colors.primaryText}`}>
+                            {data.category || 'N/A'}
+                          </span>
+                          <span className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {data.rows.toLocaleString()} 行 × {data.cols} 列
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+
+                {/* 分页 */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className={`w-8 h-8 flex items-center justify-center rounded border-2 ${colors.borderColor} cursor-pointer text-sm ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : theme === 'dark' ? 'text-white hover:bg-gray-800' : 'text-gray-900 hover:bg-gray-50'
+                        }`}
+                    >
+                      <i className="ri-arrow-left-s-line"></i>
+                    </button>
+                    <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`w-8 h-8 flex items-center justify-center rounded border-2 ${colors.borderColor} cursor-pointer text-sm ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : theme === 'dark' ? 'text-white hover:bg-gray-800' : 'text-gray-900 hover:bg-gray-50'
+                        }`}
+                    >
+                      <i className="ri-arrow-right-s-line"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 选择建模数据 */}
+              <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                    <i className={`ri-file-list-3-line text-${colors.primaryText} text-xl`}></i>
+                  </div>
+                  <div>
+                    <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>选择建模数据</h2>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>选择数据列并预览</p>
+                  </div>
+                </div>
+                {loadingColumns ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                  </div>
+                ) : showColumnSelector ? (
+                  <div className="space-y-4">
+                    <div className={`p-4 rounded-lg border-2 ${colors.borderColor} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                      <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-3`}>
+                        选择数据列（日期默认选中，最多选择2个其他列）
+                      </p>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {availableColumns.map((col) => (
+                          <div key={col.name} className="space-y-2">
+                            <div className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={col.selected}
+                                // disabled={col.name === '日期'} // Relaxed check
+                                onChange={() => handleColumnToggle(col.name)}
+                                className={`mt-1 w-4 h-4 text-${colors.primaryText} rounded cursor-pointer`}
+                              />
+                              <div className="flex-1">
+                                <div className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{col.name}</div>
+                                <div className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mt-1 space-y-1`}>
+                                  {col.previewData.slice(0, 5).map((val, idx) => (
+                                    <div key={idx}>{typeof val === 'number' ? val.toLocaleString() : val}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleConfirmImport}
+                        className={`flex-1 px-4 py-2 ${getHighlightStyle()} text-sm font-medium rounded-lg hover:opacity-90 cursor-pointer whitespace-nowrap`}
+                      >
+                        确认导入数据
+                      </button>
+                      <button
+                        onClick={handleCancelImport}
+                        className={`px-4 py-2 ${theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} text-sm font-medium rounded-lg cursor-pointer whitespace-nowrap`}
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`h-64 flex flex-col items-center justify-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <i className="ri-inbox-line text-5xl mb-3"></i>
+                    <p className="text-sm">请在左侧选择数据类</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: 建模数据 */}
+            <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
+              <div className="flex items-center gap-3 mb-5">
+                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                  <i className={`ri-table-line text-${colors.primaryText} text-xl`}></i>
+                </div>
+                <div>
+                  <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>建模数据</h2>
+                  <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>已导入的数据预览</p>
+                </div>
+              </div>
+              {importedDataList.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <div className="flex gap-6">
+                    {/* 表头列 */}
+                    <div className="flex-shrink-0">
+                      <div className={`${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} border-2 ${colors.borderColor} px-4 py-2 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-sm mb-2`}>
+                        表头
+                      </div>
+                      {importedDataList[0].columns.map((col) => (
+                        <div key={col.name} className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+                          {col.name}
+                        </div>
+                      ))}
+                      {importedDataList.slice(1).map((data) => (
+                        data.columns.filter(c => c.name !== data.dateColumn).map((col) => (
+                          <div key={`${data.dataId}-${col.name}`} className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+                            {col.name}
+                          </div>
+                        ))
+                      ))}
+                    </div>
+                    {/* 数据列 */}
+                    <div className="flex-1 overflow-x-auto">
+                      <div className="flex gap-4">
+                        {[0, 1, 2, 3, 4].map((colIdx) => (
+                          <div key={colIdx} className="flex-shrink-0">
+                            <div className={`${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} border-2 ${colors.borderColor} px-4 py-2 text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-center mb-2 w-32`}>
+                              数据 {colIdx + 1}
+                            </div>
+                            {importedDataList[0].columns.map((col) => (
+                              <div key={col.name} className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} w-32 text-center`}>
+                                {typeof col.previewData[colIdx] === 'number'
+                                  ? Number(col.previewData[colIdx]).toLocaleString()
+                                  : col.previewData[colIdx]}
+                              </div>
+                            ))}
+                            {importedDataList.slice(1).map((data) => (
+                              data.columns.filter(c => c.name !== data.dateColumn).map((col) => (
+                                <div key={`${data.dataId}-${col.name}`} className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} w-32 text-center`}>
+                                  {typeof col.previewData[colIdx] === 'number'
+                                    ? Number(col.previewData[colIdx]).toLocaleString()
+                                    : col.previewData[colIdx]}
+                                </div>
+                              ))
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className={`h-48 flex flex-col items-center justify-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                  <i className="ri-inbox-line text-5xl mb-3"></i>
+                  <p className="text-sm">暂无导入的数据</p>
+                </div>
+              )}
+            </div>
+
+            {/* Row 3: 选择模型类型 + 参数配置 + 建模提示 */}
+            <div className="grid grid-cols-4 gap-6">
+              {/* 选择模型类型 - 占2列 */}
+              <div className={`col-span-2 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                    <i className={`ri-function-line text-${colors.primaryText} text-xl`}></i>
+                  </div>
+                  <div>
+                    <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>选择模型类型</h2>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>根据研究需求选择合适的模型</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {modelTypes.map((model) => (
+                    <div
+                      key={model.id}
+                      onClick={() => setSelectedModel(model.id)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedModel === model.id
+                        ? `${colors.selectedBorder} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`
+                        : `${colors.borderColor} ${theme === 'dark' ? 'hover:border-gray-600' : 'hover:border-gray-300'}`
+                        }`}
+                    >
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg bg-gradient-to-br ${colors.cardGradient}`}>
+                          <i className={`${model.icon} text-white text-xl`}></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-1`}>{model.name}</h3>
+                          <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} line-clamp-2`}>{model.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 参数配置 - 占1列 */}
+              <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                    <i className={`ri-settings-3-line text-${colors.primaryText} text-xl`}></i>
+                  </div>
+                  <div>
+                    <h2 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>参数配置</h2>
+                  </div>
+                </div>
+                {selectedModel ? (
+                  <div className="space-y-4">
+                    {selectedModel === 'arma' && (
+                      <>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>AR阶数 (p)</label>
+                          <input
+                            type="number"
+                            defaultValue="2"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>MA阶数 (q)</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" defaultChecked className={`w-4 h-4 text-${colors.primaryText} rounded cursor-pointer`} />
+                            <span className={`text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>包含常数项</span>
+                          </label>
+                        </div>
+                      </>
+                    )}
+
+                    {selectedModel === 'arima' && (
+                      <>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>AR阶数 (p)</label>
+                          <input
+                            type="number"
+                            defaultValue="2"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>差分阶数 (d)</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>MA阶数 (q)</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Other models... (Keeping simplified for brevity as logic is same, just rendering parameters) */}
+                    {/* For brevity, I'll allow the other models to render their inputs as in original but ensure styles match */}
+                    {/* Re-implementing the other models to be safe */}
+
+                    {selectedModel === 'arch' && (
+                      <>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>ARCH阶数 (q)</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>分布假设</label>
+                          <select className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                            <option>正态分布</option>
+                            <option>t分布</option>
+                            <option>GED分布</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {selectedModel === 'garch' && (
+                      <>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>ARCH阶数 (p)</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>GARCH阶数 (q)</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>分布类型</label>
+                          <select className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                            <option>正态分布</option>
+                            <option>t分布</option>
+                            <option>GED分布</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {selectedModel === 'var' && (
+                      <>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>滞后阶数</label>
+                          <input
+                            type="number"
+                            defaultValue="2"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>趋势项设定</label>
+                          <select className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                            <option>无趋势</option>
+                            <option>常数项</option>
+                            <option>线性趋势</option>
+                            <option>二次趋势</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {selectedModel === 'vecm' && (
+                      <>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>协整秩</label>
+                          <input
+                            type="number"
+                            defaultValue="1"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>滞后阶数</label>
+                          <input
+                            type="number"
+                            defaultValue="2"
+                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>趋势设定</label>
+                          <select className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                            <option>无趋势无常数</option>
+                            <option>有常数无趋势</option>
+                            <option>有常数有趋势</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {/* 开始构建按钮 */}
+                    <div className="pt-4">
+                      <button
+                        onClick={handleStartBuilding}
+                        disabled={!canStartBuilding || isBuilding}
+                        title={!canStartBuilding ? '请确保选择了输入数据与模型' : ''}
+                        className={`w-full px-4 py-3 text-sm font-semibold rounded-lg flex items-center justify-center gap-2 whitespace-nowrap transition-all ${canStartBuilding && !isBuilding
+                          ? `${getHighlightStyle()} hover:opacity-90 cursor-pointer`
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
+                      >
+                        {isBuilding ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+                            构建中...
+                          </>
+                        ) : (
+                          <>
+                            <i className="ri-play-circle-line text-xl"></i>
+                            开始构建模型
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`h-64 flex flex-col items-center justify-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <i className="ri-inbox-line text-5xl mb-3"></i>
+                    <p className="text-sm">请在左侧选择模型类型</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 建模提示 - 占1列 */}
+              <div className={`${theme === 'dark' ? 'bg-gray-900' : `bg-gradient-to-br ${colors.gradient}`} rounded-xl border-2 ${colors.borderColor} p-6`}>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-white' : theme === 'light' ? 'bg-gray-900' : `bg-${colors.primary}`}`}>
+                    <i className={`ri-lightbulb-line ${theme === 'dark' ? 'text-black' : 'text-white'} text-xl`}></i>
+                  </div>
+                  <div>
+                    <h3 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-2`}>建模提示</h3>
+                    <ul className={`space-y-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <li className="flex items-start gap-2">
+                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
+                        <span>建议先进行数据平稳性检验</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
+                        <span>GARCH模型适用于波动率聚集的序列</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
+                        <span>VAR模型要求所有变量同阶平稳</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
+                        <span>使用AIC/BIC准则选择最优阶数</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

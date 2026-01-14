@@ -6,10 +6,11 @@ Returns structured data (JSON).
 
 from typing import Any, Dict, List, Optional
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
 from src.server.core.dependencies import Container
 from src.server.utils.logger import logger
+from src.server.utils.decorators import auto_offload
 
 
 def register_filings_tools(mcp: FastMCP):
@@ -206,11 +207,13 @@ def register_filings_tools(mcp: FastMCP):
             return [{"error": str(e)}]
 
     @mcp.tool(tags={"filings-process", "filings-core"})
+    @auto_offload(threshold=5000, prefix="document_content")
     async def process_document(
         doc_id: str,
         url: str,
         doc_type: str = "unknown",
         ticker: str = None,
+        ctx: Context = None,
     ) -> Dict[str, Any]:
         """Process a single document by URL (Download & Extract Text).
 

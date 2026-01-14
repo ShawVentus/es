@@ -67,7 +67,8 @@ export default function ToolCallInfo({
   return (
     <div className="w-full p-2">
       <div style={{ opacity: 1 }}>
-        <div className="mb-2 text-sm font-medium text-text-primary">{title}</div>
+        {/* 隐藏 title 行："助手将此信息发送到了 xxx" */}
+        {/* <div className="mb-2 text-sm font-medium text-text-primary">{title}</div> */}
         <div>
           <OptimizedCodeBlock text={formatText(input)} maxHeight={250} />
         </div>

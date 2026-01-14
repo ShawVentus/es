@@ -1,0 +1,46 @@
+{
+  "ticker": "SSE:600519",
+  "company_info": {
+    "最新": 1419.1,
+    "股票代码": "600519",
+    "股票简称": "贵州茅台",
+    "总股本": 1252270215.0,
+    "流通股": 1252270215.0,
+    "总市值": 1777096662106.5,
+    "流通市值": 1777096662106.5,
+    "行业": "酿酒行业",
+    "上市时间": 20010827
+  },
+  "health_score": 45,
+  "ratios": {
+    "valuation": {
+      "pe_ratio": 0.0,
+      "pb_ratio": null,
+      "ps_ratio": 0.0,
+      "dividend_yield": null
+    },
+    "profitability": {
+      "roe": null,
+      "roa": 21.95,
+      "gross_margin": 68.35,
+      "net_margin": 51.11,
+      "operating_margin": 68.36
+    },
+    "solvency": {
+      "current_ratio": 6.62,
+      "quick_ratio": 5.18,
+      "debt_to_equity": null,
+      "asset_liability_ratio": 12.81
+    },
+    "growth": {
+      "revenue_growth": null,
+      "earnings_growth": null,
+      "assets_growth": null
+    }
+  },
+  "analysis": {
+    "rating": "Reduce",
+    "reason": "Below average health, consider reducing position."
+  },
+  "timestamp": "2026-01-11T19:34:26.078566"
+}

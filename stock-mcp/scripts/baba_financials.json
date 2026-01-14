@@ -1,0 +1,46 @@
+{
+  "ticker": "NYSE:BABA",
+  "company_info": {
+    "公司名称": "Alibaba Group Holding Limited",
+    "股票代码": "BABA",
+    "行业": "Internet Retail",
+    "板块": "Consumer Cyclical",
+    "国家": "Hong Kong",
+    "网站": "https://www.alibabagroup.com",
+    "总市值": 360390524928,
+    "员工人数": 126661,
+    "公司简介": "Alibaba Group Holding Limited, through its subsidiaries, provides technology infrastructure and marketing reach to help merchants, brands, retailers, and other businesses to engage with their users an"
+  },
+  "health_score": 0,
+  "ratios": {
+    "valuation": {
+      "pe_ratio": null,
+      "pb_ratio": null,
+      "ps_ratio": null,
+      "dividend_yield": 0.0
+    },
+    "profitability": {
+      "roe": null,
+      "roa": null,
+      "gross_margin": null,
+      "net_margin": null,
+      "operating_margin": null
+    },
+    "solvency": {
+      "current_ratio": null,
+      "quick_ratio": null,
+      "debt_to_equity": null,
+      "asset_liability_ratio": null
+    },
+    "growth": {
+      "revenue_growth": null,
+      "earnings_growth": null,
+      "assets_growth": null
+    }
+  },
+  "analysis": {
+    "rating": "Sell",
+    "reason": "Poor financial health, high risk."
+  },
+  "timestamp": "2026-01-11T19:31:35.578660"
+}

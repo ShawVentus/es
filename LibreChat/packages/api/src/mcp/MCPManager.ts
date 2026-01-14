@@ -227,7 +227,20 @@ Please follow these instructions when using tools from the respective MCP server
         body: requestBody,
       });
       if ('headers' in currentOptions) {
-        connection.setRequestHeaders(currentOptions.headers || {});
+        // 合并配置中的headers与X-User-Id
+        // 🔧 使用 email 作为用户标识，与前端保持一致
+        const userIdentifier = user?.email || userId;
+        const headers = {
+          ...(currentOptions.headers || {}),
+          ...(userIdentifier ? { 'X-User-Id': userIdentifier } : {}),
+        };
+        connection.setRequestHeaders(headers);
+        logger.info(`${logPrefix} 🔍 [DEBUG] 设置请求 headers:`, { headers, userIdentifier });
+      } else if (userId) {
+        // 即使没有配置headers，也注入X-User-Id
+        const userIdentifier = user?.email || userId;
+        connection.setRequestHeaders({ 'X-User-Id': userIdentifier });
+        logger.info(`${logPrefix} 🔍 [DEBUG] 设置 X-User-Id header:`, { userIdentifier });
       }
 
       const result = await connection.client.request(

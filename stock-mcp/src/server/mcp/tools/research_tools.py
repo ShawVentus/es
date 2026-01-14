@@ -8,15 +8,17 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
 from src.server.core.dependencies import Container
 from src.server.utils.logger import logger
+from src.server.utils.decorators import auto_offload
 
 
 def register_research_tools(mcp: FastMCP):
     @mcp.tool(tags={"research", "analysis", "core"})
-    async def perform_deep_research(symbol: str, days_back: int = 30) -> Dict[str, Any]:
+    @auto_offload(threshold=5000, prefix="deep_research")
+    async def perform_deep_research(symbol: str, days_back: int = 30, ctx: Context = None) -> Dict[str, Any]:
         """Generate a deep research report for `symbol`.
 
         Aggregates:

@@ -460,6 +460,9 @@ export class MCPConnection extends EventEmitter {
 
           /** Add OAuth token to headers if available */
           const headers = { ...options.headers };
+          // 🔍 临时调试：查看options.headers是否包含X-User-Id
+          logger.info(`${this.getLogPrefix()} [DEBUG] options.headers:`, JSON.stringify(options.headers));
+          logger.info(`${this.getLogPrefix()} [DEBUG] merged headers:`, JSON.stringify(headers));
           if (this.oauthTokens?.access_token) {
             headers['Authorization'] = `Bearer ${this.oauthTokens.access_token}`;
           }

@@ -7,6 +7,7 @@ import {
   renderEndpoints,
   renderSearchResults,
   renderCustomGroups,
+  renderEndpointModels,
 } from './components';
 import { ModelSelectorProvider, useModelSelectorContext } from './ModelSelectorContext';
 import { ModelSelectorChatProvider } from './ModelSelectorChatContext';
@@ -104,8 +105,21 @@ function ModelSelectorContent() {
               modelSpecs?.filter((spec) => !spec.group) || [],
               selectedValues.modelSpec || '',
             )}
-            {/* Render endpoints (will include grouped specs matching endpoint names) */}
-            {renderEndpoints(mappedEndpoints ?? [])}
+
+            {/* Flattened Agents View: Always prefer agents listing if available, hiding others */}
+            {mappedEndpoints?.find(e => e.value === 'agents' && e.models) ? (
+              renderEndpointModels(
+                mappedEndpoints.find(e => e.value === 'agents')!,
+                mappedEndpoints.find(e => e.value === 'agents')!.models!,
+                selectedValues.model || '',
+                undefined,
+                0
+              )
+            ) : (
+              /* Fallback: Render all endpoints */
+              renderEndpoints(mappedEndpoints ?? [])
+            )}
+
             {/* Render custom groups (specs with group field not matching any endpoint) */}
             {renderCustomGroups(modelSpecs || [], mappedEndpoints ?? [])}
           </>

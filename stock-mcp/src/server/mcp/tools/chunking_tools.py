@@ -5,9 +5,10 @@ Provides ChunkedDocument-based chunking with item labels for SEC filings.
 
 from typing import Any, Dict, List, Optional
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
 from src.server.utils.logger import logger
+from src.server.utils.decorators import auto_offload
 
 
 def _chunk_to_text(chunk_obj) -> str:
@@ -44,10 +45,12 @@ def register_chunking_tools(mcp: FastMCP):
     """Register document chunking tools."""
 
     @mcp.tool(tags={"chunking", "rag-core"})
+    @auto_offload(threshold=5000, prefix="document_chunks")
     async def get_document_chunks(
         ticker: str,
         doc_id: str,
         items: list[str] = None,
+        ctx: Context = None,
     ) -> Dict[str, Any]:
         """Get semantic chunks from SEC filing with item labels.
         

@@ -52,6 +52,29 @@ export const useLoginUserMutation = (
   });
 };
 
+export const useBohriumLoginMutation = (
+  options?: t.MutationOptions<t.TLoginResponse, void, unknown, unknown>,
+): UseMutationResult<t.TLoginResponse, unknown, void, unknown> => {
+  const queryClient = useQueryClient();
+  const clearStates = useClearStates();
+  const resetDefaultPreset = useResetRecoilState(store.defaultPreset);
+  const setQueriesEnabled = useSetRecoilState<boolean>(store.queriesEnabled);
+  return useMutation([MutationKeys.loginUser], {
+    mutationFn: () => request.post('/api/auth/login-bohrium', {}),
+    ...(options || {}),
+    onMutate: (vars) => {
+      resetDefaultPreset();
+      clearStates();
+      queryClient.removeQueries();
+      options?.onMutate?.(vars);
+    },
+    onSuccess: (...args) => {
+      setQueriesEnabled(true);
+      options?.onSuccess?.(...args);
+    },
+  });
+};
+
 export const useRefreshTokenMutation = (
   options?: t.MutationOptions<t.TRefreshTokenResponse | undefined, undefined, unknown, unknown>,
 ): UseMutationResult<t.TRefreshTokenResponse | undefined, unknown, undefined, unknown> => {

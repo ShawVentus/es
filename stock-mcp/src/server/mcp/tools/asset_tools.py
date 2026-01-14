@@ -5,14 +5,15 @@ Returns structured data (JSON).
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import asyncio
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
 from src.server.core.dependencies import Container
 from src.server.domain.types import AssetSearchQuery, AssetType
 from src.server.utils.logger import logger
+from src.server.utils.decorators import auto_offload
 
 
 # ============================================================
@@ -124,11 +125,15 @@ def register_asset_tools(mcp: FastMCP):
             asset = await manager.get_asset_info(ticker)
             if asset:
                 return asset.model_dump(mode="json")
-            return {"error": f"Asset not found: {ticker}"}
+            return {
+                "error": f"Asset not found: {ticker}. SYSTEM_ALERT: This asset is currently unavailable (404/Not Found) or network fluctuation. STOP RETRYING this ticker immediately. Report partial results or try again later."
+            }
 
         except Exception as e:
             logger.error(f"Get asset info failed: {e}")
-            return {"error": str(e)}
+            return {
+                "error": f"Get asset info failed: {str(e)}. SYSTEM_ALERT: External API error or network fluctuation. STOP RETRYING immediately."
+            }
 
     @mcp.tool(tags={"asset-price", "asset-extended"})
     async def get_real_time_price(ticker: str) -> Dict[str, Any]:
@@ -147,11 +152,15 @@ def register_asset_tools(mcp: FastMCP):
             price = await manager.get_real_time_price(ticker)
             if price:
                 return price.to_dict()
-            return {"error": f"Price not found for {ticker}"}
+            return {
+                "error": f"Price not found for {ticker}. SYSTEM_ALERT: This asset is currently unavailable due to external API limit or network fluctuation. STOP RETRYING immediately. Report partial results or try again later."
+            }
 
         except Exception as e:
             logger.error(f"Get real-time price failed: {e}")
-            return {"error": str(e)}
+            return {
+                "error": f"Get real-time price failed: {str(e)}. SYSTEM_ALERT: External API error or network fluctuation. STOP RETRYING immediately."
+            }
 
     @mcp.tool(tags={"asset-price-batch", "asset-extended"})
     async def get_multiple_prices(tickers: list[str]) -> Dict[str, Any]:
@@ -171,26 +180,47 @@ def register_asset_tools(mcp: FastMCP):
 
     @mcp.tool(tags={"asset-history", "asset-extended"})
     async def get_historical_prices(
-        ticker: str, start_date: str, end_date: str, interval: str = "1d"
-    ) -> List[Dict[str, Any]]:
-        """Get historical price data (OHLCV).
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        filename: str,
+        interval: str = "1d",
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """Get historical price data (OHLCV) and save to user's dataset library.
 
+        **CRITICAL**: You MUST provide a descriptive filename for the output dataset.
+        The filename should be descriptive and unique (e.g., "BABA_2023_Annual_Prices").
+        
         Args:
             ticker: Asset ticker in EXCHANGE:SYMBOL format (use search_assets to find tickers)
             start_date: Start date (YYYY-MM-DD)
             end_date: End date (YYYY-MM-DD)
+            filename: **REQUIRED** Custom filename for the saved dataset (NO .csv extension needed).
+                      Example: "BABA_2023_Stock_Data", "Tesla_Q4_Prices"
             interval: Data interval (1d, 1wk, 1mo)
 
         Returns:
-            List of historical price data points (date, open, high, low, close, volume)
+            Success message with dataset info. User can view data in "My Data" page.
         """
+        import pandas as pd
+        from src.server.core.dataset_manager import get_dataset_manager
+        from src.server.utils.request_context import get_current_user_id
+        
         try:
+            # 验证 filename 参数
+            if not filename or not filename.strip():
+                return {
+                    "error": "filename is required. Please provide a descriptive name like 'BABA_2023_Stock_Data'."
+                }
+            
             manager = Container.adapter_manager()
             logger.info(
                 "MCP tool called: get_historical_prices",
                 ticker=ticker,
                 start=start_date,
                 end=end_date,
+                filename=filename,
             )
 
             start = datetime.strptime(start_date, "%Y-%m-%d")
@@ -202,11 +232,74 @@ def register_asset_tools(mcp: FastMCP):
                 end_date=end,
                 interval=interval,
             )
-            return [p.to_dict() for p in prices]
+            
+            if not prices:
+                return {
+                    "error": f"No data found for {ticker} in the specified date range."
+                }
+            
+            # 转换为 DataFrame
+            df = pd.DataFrame([p.to_dict() for p in prices])
+            
+            # 🔧 修复：使用 FastMCP 的 get_http_headers() 获取用户ID
+            from fastmcp.server.dependencies import get_http_headers
+            
+            user_id = None
+            
+            # 从 HTTP 请求头中获取 X-User-Id
+            headers = get_http_headers()
+            if headers:
+                # get_http_headers() 返回的键是小写的
+                user_id = headers.get('x-user-id')
+                logger.info(f"🔍 [DEBUG] 从 HTTP headers 获取 user_id: {user_id}")
+                logger.info(f"🔍 [DEBUG] 所有 HTTP headers: {headers}")
+            else:
+                logger.warning("⚠️ get_http_headers() 返回 None")
+            
+            # Fallback: 从请求上下文变量中获取
+            if not user_id:
+                user_id = get_current_user_id()
+                logger.info(f"🔍 [DEBUG] Fallback 从 get_current_user_id() 获取: {user_id}")
+            
+            if not user_id:
+                # 如果没有用户ID，使用默认值（用于调试）
+                user_id = "anonymous"
+                logger.warning("⚠️ No user_id found from any source, using 'anonymous'")
+            
+            logger.info(f"🔍 [DEBUG] 最终使用的 user_id: {user_id}")
+            
+            # 使用 DatasetManager 保存
+            dataset_mgr = get_dataset_manager()
+            result = dataset_mgr.save_dataset(
+                user_id=user_id,
+                df=df,
+                filename=filename.strip(),
+                category="Stock"
+            )
+            
+            if not result.get("success"):
+                return {
+                    "error": f"Failed to save dataset: {result.get('error', 'Unknown error')}"
+                }
+            
+            # 返回用户友好的消息（不包含路径）
+            return {
+                "success": True,
+                "message": f"✅ 数据已保存至 [{result['filename']}] ({result['rows']} 条记录, {result['cols']} 列)。请前往\"我的数据\"页面查看。",
+                "summary": {
+                    "filename": result['filename'],
+                    "rows": result['rows'],
+                    "cols": result['cols'],
+                    "size": result.get('size_formatted', 'N/A'),
+                    "stats": result.get('stats', {})
+                }
+            }
 
         except Exception as e:
-            logger.error(f"Get historical prices failed: {e}")
-            return [{"error": str(e)}]
+            logger.error(f"Get historical prices failed: {e}", exc_info=True)
+            return {
+                "error": f"Get historical prices failed: {str(e)}. SYSTEM_ALERT: External API error or network fluctuation. STOP RETRYING immediately."
+            }
 
     @mcp.tool(tags={"market-report", "asset-extended"})
     async def get_market_report(symbol: str) -> Dict[str, Any]:

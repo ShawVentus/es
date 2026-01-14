@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ErrorTypes, registerPage } from 'librechat-data-provider';
-import { OpenIDIcon, useToastContext } from '@librechat/client';
+import { useBohriumLoginMutation } from '~/data-provider';
+import { Spinner, OpenIDIcon, useToastContext } from '@librechat/client';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import type { TLoginLayoutContext } from '~/common';
 import { ErrorMessage } from '~/components/Auth/ErrorMessage';
@@ -59,6 +60,54 @@ function Login() {
       window.location.href = `${startupConfig.serverDomain}/oauth/openid`;
     }
   }, [shouldAutoRedirect, startupConfig]);
+
+  const bohriumLogin = useBohriumLoginMutation({
+    onSuccess: () => {
+      // 登录成功后跳转到聊天页面，AuthContext 会通过 silentRefresh 恢复会话
+      window.location.href = '/c/new';
+    },
+    onError: (err) => {
+      console.error('Bohrium auto-login failed:', err);
+      // 可选：设置错误信息 setError('Bohrium 登录失败');
+    }
+  });
+
+  const enableBohriumAuth = startupConfig?.enableBohriumAuth;
+
+  console.log('[Bohrium Debug] enableBohriumAuth =', enableBohriumAuth);
+  console.log('[Bohrium Debug] bohriumLogin state =', {
+    isLoading: bohriumLogin.isLoading,
+    isSuccess: bohriumLogin.isSuccess,
+    isError: bohriumLogin.isError
+  });
+
+  useEffect(() => {
+    console.log('[Bohrium Debug] useEffect triggered, enableBohriumAuth =', enableBohriumAuth);
+    if (enableBohriumAuth && !bohriumLogin.isLoading && !bohriumLogin.isSuccess && !bohriumLogin.isError) {
+      console.log('[Bohrium Debug] Calling bohriumLogin.mutate()');
+      bohriumLogin.mutate();
+    }
+  }, [enableBohriumAuth, bohriumLogin]);
+
+  if (enableBohriumAuth) {
+    console.log('[Bohrium Debug] Rendering Bohrium login UI');
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner className="h-8 w-8 animate-spin" />
+          <p className="text-lg font-semibold">
+            {localize('com_auth_logging_in')}
+          </p>
+          {bohriumLogin.isError && (
+            <div className="text-red-500">
+              <p>Bohrium 登录失败，请刷新重试或检查 Cookie。</p>
+              <button onClick={() => window.location.reload()} className="mt-2 underline">刷新页面</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Render fallback UI if auto-redirect is active.
   if (shouldAutoRedirect) {

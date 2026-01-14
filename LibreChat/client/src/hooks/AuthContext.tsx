@@ -87,6 +87,20 @@ const AuthContextProvider = ({
       }
       setError(undefined);
       setUserContext({ token, isAuthenticated: true, user, redirect: '/c/new' });
+      // 通知父窗口登录成功（用于iframe嵌入场景）
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'LIBRECHAT_LOGIN',
+          isAuthenticated: true,
+          token,
+          user: {
+            id: user?.id,
+            name: user?.name,
+            email: user?.email,
+            role: user?.role
+          }
+        }, '*');
+      }
     },
     onError: (error: TResError | unknown) => {
       const resError = error as TResError;
@@ -96,6 +110,10 @@ const AuthContextProvider = ({
   });
   const logoutUser = useLogoutUserMutation({
     onSuccess: (data) => {
+      // Notify parent window about logout
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'LIBRECHAT_LOGOUT', isAuthenticated: false }, '*');
+      }
       setUserContext({
         token: undefined,
         isAuthenticated: false,
@@ -141,6 +159,20 @@ const AuthContextProvider = ({
         const { user, token = '' } = data ?? {};
         if (token) {
           setUserContext({ token, isAuthenticated: true, user });
+          // 通知父窗口自动登录成功
+          if (window.parent !== window) {
+            window.parent.postMessage({
+              type: 'LIBRECHAT_LOGIN',
+              isAuthenticated: true,
+              token,
+              user: {
+                id: user?.id,
+                name: user?.name,
+                email: user?.email,
+                role: user?.role
+              }
+            }, '*');
+          }
         } else {
           console.log('Token is not present. User is not authenticated.');
           if (authConfig?.test === true) {
@@ -194,6 +226,20 @@ const AuthContextProvider = ({
         isAuthenticated: true,
         user: user,
       });
+      // 通知父窗口Token更新
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'LIBRECHAT_LOGIN',
+          isAuthenticated: true,
+          token: newToken,
+          user: {
+            id: user?.id,
+            name: user?.name,
+            email: user?.email,
+            role: user?.role
+          }
+        }, '*');
+      }
     };
 
     window.addEventListener('tokenUpdated', handleTokenUpdate);
@@ -202,6 +248,31 @@ const AuthContextProvider = ({
       window.removeEventListener('tokenUpdated', handleTokenUpdate);
     };
   }, [setUserContext, user]);
+
+  // Listen for authentication status queries from parent window
+  useEffect(() => {
+    const handleAuthQuery = (event: MessageEvent) => {
+      if (event.data?.type === 'QUERY_AUTH_STATUS') {
+        const source = event.source as WindowProxy;
+        if (source && source.postMessage) {
+          source.postMessage({
+            type: 'LIBRECHAT_AUTH_STATUS',
+            isAuthenticated,
+            token,
+            user: isAuthenticated ? {
+              id: user?.id,
+              name: user?.name,
+              email: user?.email,
+              role: user?.role
+            } : null
+          }, event.origin);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleAuthQuery);
+    return () => window.removeEventListener('message', handleAuthQuery);
+  }, [isAuthenticated, token, user]);
 
   // Make the provider update only when it should
   const memoedValue = useMemo(

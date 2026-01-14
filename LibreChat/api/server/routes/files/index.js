@@ -14,6 +14,8 @@ const files = require('./files');
 const images = require('./images');
 const avatar = require('./avatar');
 const speech = require('./speech');
+const dataset = require('./dataset');  // 用户数据集API
+const download = require('./download'); // 文件下载API
 
 const initialize = async () => {
   const router = express.Router();
@@ -54,6 +56,8 @@ const initialize = async () => {
   router.use('/images/avatar', avatar);
   router.use('/images/agents', agentAvatarRouter);
   router.use('/images/assistants', asstAvatarRouter);
+  router.use('/dataset', dataset);  // 用户数据集文件列表API
+  router.use('/download', download); // 文件下载API
   return router;
 };
 
