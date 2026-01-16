@@ -52,7 +52,9 @@ export interface DatasetPreview {
     meta: DatasetMeta;
     chart_points: Array<{ x: string; y: number }>;
     head_rows: unknown[][];
+    tail_rows?: unknown[][];
     columns: string[];
+    total_rows: number;
     error?: string;
 }
 

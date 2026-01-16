@@ -26,6 +26,22 @@ import * as api from '../api/dataset';
 import type { DatasetMeta } from '../api/dataset';
 
 /**
+ * 模拟数据常量
+ * 当 API 返回空数据或调用失败时使用
+ */
+const MOCK_DATASET: DatasetMeta = {
+    filename: 'NVDA_Half_Year_Prices_202507_202601.csv',
+    name: 'NVDA半年价格数据（模拟）',
+    category: '股票数据',
+    rows: 128,
+    cols: 10,
+    size: 17584,
+    size_formatted: '17.2 KB',
+    created_at: '2026-01-15T21:32:09.235695',
+    columns: ['ticker', 'price', 'currency', 'timestamp', 'volume', 'open_price', 'high_price', 'low_price', 'close_price', 'source']
+};
+
+/**
  * 数据集管理 Hook 返回类型
  */
 interface UseDatasets {
@@ -99,13 +115,28 @@ export function useDatasets(): UseDatasets {
         try {
             console.log('[useDatasets] Fetching datasets...');
             const data = await api.listDatasets();
-            setDatasets(data);
+
+            // 如果返回的数据为空，也使用模拟数据
+            if (!data || data.length === 0) {
+                console.warn('[useDatasets] API 返回空数据，加载模拟数据...');
+                setDatasets([MOCK_DATASET]);
+                toast.info('当前无数据，已加载模拟数据供测试使用');
+            } else {
+                setDatasets(data);
+                console.log('[useDatasets] Fetched', data.length, 'datasets');
+            }
+
             setLastFetchTime(Date.now());
-            console.log('[useDatasets] Fetched', data.length, 'datasets');
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : '获取数据失败';
             setError(errorMsg);
-            toast.error(errorMsg);
+
+            // 失败时加载模拟数据
+            console.warn('[useDatasets] 数据获取失败，加载模拟数据...');
+            setDatasets([MOCK_DATASET]);
+            setLastFetchTime(Date.now());
+
+            toast.error(`${errorMsg}，已加载模拟数据供测试使用`);
             console.error('[useDatasets] Fetch error:', err);
         } finally {
             setIsLoading(false);

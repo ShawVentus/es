@@ -113,7 +113,7 @@ async def list_datasets(request: Request) -> List[Dict[str, Any]]:
 async def preview_dataset(filename: str, request: Request) -> Dict[str, Any]:
     """
     获取数据集预览
-    
+
     返回格式:
     {
         "success": true,
@@ -130,20 +130,25 @@ async def preview_dataset(filename: str, request: Request) -> Dict[str, Any]:
     """
     user_id = _require_user_id(request)
     _debug_log("Preview dataset request", user_id=user_id, filename=filename)
-    
+
     try:
         manager = get_dataset_manager()
         result = manager.get_dataset_preview(user_id, filename)
-        
+
+        # 如果用户文件不存在，尝试从 anonymous 用户获取模拟数据
+        if not result.get("success") and filename == "NVDA_Half_Year_Prices_202507_202601.csv":
+            logger.info(f"User {user_id} file not found, falling back to anonymous mock data: {filename}")
+            result = manager.get_dataset_preview("anonymous", filename)
+
         if not result.get("success"):
             raise HTTPException(
                 status_code=404,
                 detail=result.get("error", "Dataset not found")
             )
-        
+
         _debug_log("Preview generated successfully", filename=filename)
         return result
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -198,39 +203,48 @@ async def delete_dataset(filename: str, request: Request) -> Dict[str, str]:
 async def download_dataset(filename: str, request: Request) -> FileResponse:
     """
     下载数据集文件
-    
+
     返回 CSV 文件流
     """
     user_id = _require_user_id(request)
     _debug_log("Download dataset request", user_id=user_id, filename=filename)
-    
+
     try:
         manager = get_dataset_manager()
-        
+
         # 清理文件名并构建路径
         safe_filename = manager._sanitize_filename(filename)
         user_dir = manager._get_user_dataset_dir(user_id)
         csv_path = user_dir / f"{safe_filename}.csv"
-        
+
         # 安全检查：确保路径在用户目录内
         try:
             csv_path.resolve().relative_to(user_dir.resolve())
         except ValueError:
             logger.warning(f"Path traversal attempt: {filename} by user {user_id}")
             raise HTTPException(status_code=400, detail="Invalid filename")
-        
-        # 检查文件存在
+
+        # 检查文件存在，如果不存在且是 NVDA 模拟数据，则从 anonymous 用户获取
         if not csv_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
-        
+            if filename == "NVDA_Half_Year_Prices_202507_202601.csv":
+                logger.info(f"User {user_id} file not found, falling back to anonymous mock data: {filename}")
+                # 从 anonymous 用户目录获取
+                anonymous_dir = manager._get_user_dataset_dir("anonymous")
+                csv_path = anonymous_dir / f"{safe_filename}.csv"
+
+                if not csv_path.exists():
+                    raise HTTPException(status_code=404, detail="Mock data file not found")
+            else:
+                raise HTTPException(status_code=404, detail="File not found")
+
         _debug_log("Sending file", path=str(csv_path))
-        
+
         return FileResponse(
             path=str(csv_path),
             filename=f"{safe_filename}.csv",
             media_type="text/csv"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

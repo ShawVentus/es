@@ -10,8 +10,26 @@ import { DeleteModal } from '../../components/common/DeleteModal';
 import type { DatasetMeta } from '../../api/dataset';
 
 type ViewMode = 'grid' | 'list';
-type CategoryType = '全部' | 'Stock' | 'Future' | 'Forex' | 'Crypto' | 'Macro';
-const categories: CategoryType[] = ['全部', 'Stock', 'Future', 'Forex', 'Crypto', 'Macro'];
+type CategoryType = '全部' | '宏观数据' | '利率数据' | '外汇数据' | '期货' | '期权' | '债券' | '现货' | '指数' | 'QDII' | '另类' | '股票数据';
+const categories: CategoryType[] = ['全部', '宏观数据', '利率数据', '外汇数据', '期货', '期权', '债券', '现货', '指数', 'QDII', '另类', '股票数据'];
+
+// 分类颜色映射
+const getCategoryColor = (category: string) => {
+  const colorMap: Record<string, string> = {
+    '宏观数据': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    '利率数据': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    '外汇数据': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    '期货': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    '期权': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
+    '债券': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+    '现货': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    '指数': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    'QDII': 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+    '另类': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+    '股票数据': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  };
+  return colorMap[category] || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+};
 
 export default function MyData() {
   const navigate = useNavigate();
@@ -23,6 +41,7 @@ export default function MyData() {
     datasets,
     isLoading,
     isAuthenticated,
+    refresh,
     deleteDataset,
     downloadDataset,
     batchDownload,
@@ -38,6 +57,7 @@ export default function MyData() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]); // 存储 filenames
   const [showBatchActions, setShowBatchActions] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 删除 Modal 状态
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; filename: string }>({
@@ -77,6 +97,15 @@ export default function MyData() {
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setCurrentPage(1);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handlePreview = (filename: string) => {
@@ -196,8 +225,24 @@ export default function MyData() {
               />
             </div>
 
-            {/* Batch Actions & View Mode Toggle */}
+            {/* Refresh, Batch Actions & View Mode Toggle */}
             <div className="flex items-center gap-2">
+              {/* Refresh Button */}
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing || isLoading}
+                className={`text-sm font-medium px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap flex items-center gap-2 transition-all ${
+                  isRefreshing || isLoading
+                    ? 'opacity-50 cursor-not-allowed'
+                    : theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="刷新数据列表"
+              >
+                <i className={`ri-refresh-line text-lg ${isRefreshing ? 'animate-spin' : ''}`}></i>
+                <span>{isRefreshing ? '刷新中...' : '刷新'}</span>
+              </button>
               <button
                 onClick={() => setShowBatchActions(!showBatchActions)}
                 className={`text-sm font-medium px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap ${showBatchActions
@@ -364,10 +409,7 @@ export default function MyData() {
                       {item.name || item.filename}
                     </h3>
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-xs ${item.category === 'Stock' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        item.category === 'Macro' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                          'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                        }`}>
+                      <span className={`px-2 py-0.5 rounded text-xs ${getCategoryColor(item.category)}`}>
                         {item.category || '未分类'}
                       </span>
                       <span className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -451,8 +493,7 @@ export default function MyData() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded text-xs ${item.category === 'Stock' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                          }`}>
+                        <span className={`px-2 py-0.5 rounded text-xs ${getCategoryColor(item.category)}`}>
                           {item.category || '未分类'}
                         </span>
                       </td>

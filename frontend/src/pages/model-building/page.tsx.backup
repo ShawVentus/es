@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import { toast } from 'react-hot-toast';
 import { useTheme, getThemeColors } from '../../hooks/useTheme';
@@ -10,17 +10,6 @@ import {
   fitARIMA, fitARMA, fitGARCH, fitARCH, fitVAR, fitVECM,
   type ModelResult
 } from '../../api/models';
-
-/**
- * 统一的日期列识别函数
- * 识别规则：列名包含 date/time/datetime/timestamp 或为中文"日期"
- */
-const isDateColumn = (columnName: string): boolean => {
-  const nameLower = columnName.toLowerCase();
-  return nameLower.includes('date') ||
-         nameLower.includes('time') ||
-         columnName === '日期';
-};
 
 interface ModelType {
   id: string;
@@ -45,7 +34,7 @@ interface ImportedData {
 }
 
 export default function ModelBuilding() {
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const colors = getThemeColors(theme);
   const navigate = useNavigate();
 
@@ -62,9 +51,6 @@ export default function ModelBuilding() {
   const [importedDataList, setImportedDataList] = useState<ImportedData[]>([]);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [isBuilding, setIsBuilding] = useState(false);
-  const [dataStartDate, setDataStartDate] = useState('');
-  const [dataEndDate, setDataEndDate] = useState('');
-  const [totalDataRows, setTotalDataRows] = useState(0);
 
   // ========== 模型参数State ==========
   const [arimaParams, setArimaParams] = useState({ p: 2, d: 1, q: 1 });
@@ -165,78 +151,19 @@ export default function ModelBuilding() {
       // backend returns columns array: ['Date', 'Open', ...]
       // previewData needs to extract column data from head_rows
 
-      const newColumns: ColumnData[] = preview.columns
-        .map((colName, colIndex) => {
-          // Extract first 10 rows for this column for preview
-          const colPreviewData = preview.head_rows.slice(0, 10).map(row => {
-            const val = row[colIndex];
-            return typeof val === 'string' || typeof val === 'number' ? val : String(val);
-          });
+      const newColumns: ColumnData[] = preview.columns.map((colName, colIndex) => {
+        // Extract first 5 rows for this column for preview
+        const colPreviewData = preview.head_rows.slice(0, 5).map(row => row[colIndex]);
+        const isDate = colName.toLowerCase().includes('date') || colName.toLowerCase().includes('time') || colName === '日期';
 
-          return {
-            name: colName,
-            selected: false, // Default to not selected
-            previewData: colPreviewData
-          };
-        })
-        .filter((col, index, self) => {
-          // 过滤重复字段名
-          const isDuplicate = self.findIndex(c => c.name === col.name) !== index;
-          if (isDuplicate) return false;
+        return {
+          name: colName,
+          selected: isDate, // Auto-select date column
+          previewData: colPreviewData
+        };
+      });
 
-          // 过滤全空字段（所有预览数据都是空的）
-          const isAllEmpty = col.previewData.every(val =>
-            val === null || val === undefined || val === '' || val === 'null' || val === 'undefined'
-          );
-          if (isAllEmpty) return false;
-
-          // 过滤重复数据（所有值都相同的字段）
-          // 检查预览数据中是否所有非空值都相同
-          const nonEmptyValues = col.previewData.filter(val =>
-            val !== null && val !== undefined && val !== '' && val !== 'null' && val !== 'undefined'
-          );
-
-          if (nonEmptyValues.length > 1) {
-            // 将所有值转换为字符串进行比较
-            const firstValue = String(nonEmptyValues[0]);
-            const isAllSame = nonEmptyValues.every(val => String(val) === firstValue);
-            if (isAllSame) return false;
-          }
-
-          return true;
-        });
-
-      // 将日期列置顶并默认选中
-      const dateColumnIndex = newColumns.findIndex(col => isDateColumn(col.name));
-
-      let sortedColumns = [...newColumns];
-      if (dateColumnIndex >= 0) {
-        // 将日期列移到第一位
-        const [dateColumn] = sortedColumns.splice(dateColumnIndex, 1);
-        // 设置为默认选中
-        dateColumn.selected = true;
-        sortedColumns.unshift(dateColumn);
-      }
-
-      setAvailableColumns(sortedColumns);
-      setTotalDataRows(preview.total_rows || preview.meta.rows || 0);
-
-      // Extract date range from date column if exists
-      const dateColIndex = preview.columns.findIndex(col =>
-        col.toLowerCase().includes('date') || col.toLowerCase().includes('time') || col === '日期'
-      );
-      if (dateColIndex >= 0 && preview.head_rows.length > 0) {
-        const firstDate = preview.head_rows[0][dateColIndex];
-        // Try to use tail_rows, fallback to last head_row
-        const lastDate = preview.tail_rows?.[preview.tail_rows.length - 1]?.[dateColIndex]
-          || preview.head_rows[preview.head_rows.length - 1]?.[dateColIndex]
-          || firstDate;
-        setDataStartDate(String(firstDate));
-        setDataEndDate(String(lastDate));
-      } else {
-        setDataStartDate('');
-        setDataEndDate('');
-      }
+      setAvailableColumns(newColumns);
     } catch (err) {
       console.error(err);
       toast.error('无法加载数据列信息');
@@ -248,33 +175,20 @@ export default function ModelBuilding() {
 
   const handleColumnToggle = (columnName: string) => {
     setAvailableColumns(prev => {
-      const targetCol = prev.find(col => col.name === columnName);
-      if (!targetCol) return prev;
-
-      // 日期列不可取消选择
-      if (isDateColumn(columnName)) {
-        toast.error('日期列为必选字段，不可取消');
-        return prev;
-      }
-
-      // 如果要取消选择，直接允许
-      if (targetCol.selected) {
-        return prev.map(col =>
-          col.name === columnName ? { ...col, selected: false } : col
-        );
-      }
-
-      // 如果要选择，检查非日期列的限制
-      const nonDateSelected = prev.filter(col => col.selected && !isDateColumn(col.name)).length;
-
-      if (nonDateSelected >= 2) {
-        toast.error('除日期列外，最多只能选择2个特征字段');
-        return prev;
-      }
-
-      return prev.map(col =>
-        col.name === columnName ? { ...col, selected: true } : col
+      const updated = prev.map(col =>
+        col.name === columnName ? { ...col, selected: !col.selected } : col
       );
+      // 确保除了日期外，最多只能选2个 (Keeping original logic limitation)
+      // Check if there is a 'Date' column marked
+      const dateCol = updated.find(c => c.name.toLowerCase().includes('date') || c.name === '日期');
+      const dateColName = dateCol ? dateCol.name : '';
+
+      const selectedCount = updated.filter(col => col.selected && col.name !== dateColName).length;
+      if (selectedCount > 2) {
+        toast('最多只能选择2个非日期列', { icon: '⚠️' });
+        return prev;
+      }
+      return updated;
     });
   };
 
@@ -288,7 +202,7 @@ export default function ModelBuilding() {
       return;
     }
 
-    const dateCol = availableColumns.find(c => isDateColumn(c.name) && c.selected);
+    const dateCol = availableColumns.find(c => (c.name.toLowerCase().includes('date') || c.name === '日期') && c.selected);
 
     const newImportedData: ImportedData = {
       dataId: data.filename,
@@ -338,16 +252,13 @@ export default function ModelBuilding() {
 
       let result: ModelResult;
 
-      // 2. 根据模型类型调用对应API（传递日期范围）
+      // 2. 根据模型类型调用对应API
       switch (selectedModel) {
         case 'arima':
           result = await fitARIMA({
             filename: firstData.dataName,
             value_col: valueColumn,
-            order: [arimaParams.p, arimaParams.d, arimaParams.q],
-            start_date: dataStartDate || undefined,
-            end_date: dataEndDate || undefined,
-            date_col: firstData.dateColumn
+            order: [arimaParams.p, arimaParams.d, arimaParams.q]
           });
           break;
 
@@ -355,10 +266,7 @@ export default function ModelBuilding() {
           result = await fitARMA({
             filename: firstData.dataName,
             value_col: valueColumn,
-            order: [armaParams.p, armaParams.q],
-            start_date: dataStartDate || undefined,
-            end_date: dataEndDate || undefined,
-            date_col: firstData.dateColumn
+            order: [armaParams.p, armaParams.q]
           });
           break;
 
@@ -367,10 +275,7 @@ export default function ModelBuilding() {
             filename: firstData.dataName,
             value_col: valueColumn,
             garch_order: [garchParams.p, garchParams.q],
-            distribution: garchParams.dist,
-            start_date: dataStartDate || undefined,
-            end_date: dataEndDate || undefined,
-            date_col: firstData.dateColumn
+            distribution: garchParams.dist
           });
           break;
 
@@ -379,10 +284,7 @@ export default function ModelBuilding() {
             filename: firstData.dataName,
             value_col: valueColumn,
             garch_order: [archParams.q],
-            distribution: archParams.dist,
-            start_date: dataStartDate || undefined,
-            end_date: dataEndDate || undefined,
-            date_col: firstData.dateColumn
+            distribution: archParams.dist
           });
           break;
 
@@ -398,10 +300,7 @@ export default function ModelBuilding() {
             value_col: valueColumn,
             lags: varParams.lags,
             include_granger: true,
-            include_irf: true,
-            start_date: dataStartDate || undefined,
-            end_date: dataEndDate || undefined,
-            date_col: firstData.dateColumn
+            include_irf: true
           });
           break;
 
@@ -418,10 +317,7 @@ export default function ModelBuilding() {
             coint_rank: vecmParams.coint_rank,
             lags: vecmParams.lags,
             include_granger: true,
-            include_irf: true,
-            start_date: dataStartDate || undefined,
-            end_date: dataEndDate || undefined,
-            date_col: firstData.dateColumn
+            include_irf: true
           });
           break;
 
@@ -595,7 +491,7 @@ export default function ModelBuilding() {
                     <i className={`ri-file-list-3-line text-${colors.primaryText} text-xl`}></i>
                   </div>
                   <div>
-                    <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>建模数据配置</h2>
+                    <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>选择建模数据</h2>
                     <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>选择数据列并预览</p>
                   </div>
                 </div>
@@ -605,129 +501,46 @@ export default function ModelBuilding() {
                   </div>
                 ) : showColumnSelector ? (
                   <div className="space-y-4">
-                    {/* 日期范围筛选 */}
-                    <div className="grid grid-cols-3 gap-3 items-center">
-                      <div>
-                        <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-1`}>起始日期</label>
-                        <input
-                          type="text"
-                          value={dataStartDate}
-                          onChange={(e) => setDataStartDate(e.target.value)}
-                          placeholder="2025-01-01"
-                          className={`w-full px-3 py-2 text-xs border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
-                        />
-                      </div>
-                      <div>
-                        <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-1`}>结束日期</label>
-                        <input
-                          type="text"
-                          value={dataEndDate}
-                          onChange={(e) => setDataEndDate(e.target.value)}
-                          placeholder="2025-07-01"
-                          className={`w-full px-3 py-2 text-xs border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                          数据总量: <span className="font-semibold">{totalDataRows}行</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 列选择器 */}
-                    <div className={`border-2 ${colors.borderColor} rounded-lg p-4 mb-4`}>
-                      <div className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-3`}>选择数据列</div>
-                      <div className="flex flex-wrap gap-2">
-                        {availableColumns.map((col) => {
-                          const isDateCol = isDateColumn(col.name);
-                          return (
-                            <label
-                              key={col.name}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all ${
-                                col.selected
-                                  ? `${colors.selectedBorder} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`
-                                  : `${colors.borderColor} ${theme === 'dark' ? 'hover:border-gray-600' : 'hover:border-gray-300'}`
-                              } ${isDateCol ? 'cursor-not-allowed opacity-60' : ''}`}
-                            >
+                    <div className={`p-4 rounded-lg border-2 ${colors.borderColor} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                      <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-3`}>
+                        选择数据列（日期默认选中，最多选择2个其他列）
+                      </p>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {availableColumns.map((col) => (
+                          <div key={col.name} className="space-y-2">
+                            <div className="flex items-start gap-3">
                               <input
                                 type="checkbox"
                                 checked={col.selected}
-                                disabled={isDateCol}
+                                // disabled={col.name === '日期'} // Relaxed check
                                 onChange={() => handleColumnToggle(col.name)}
-                                className={`w-4 h-4 text-${colors.primaryText} rounded ${isDateCol ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                className={`mt-1 w-4 h-4 text-${colors.primaryText} rounded cursor-pointer`}
                               />
-                              <span className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                                {col.name}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* 数据预览表格 - 左侧字段名，右侧数据 */}
-                    <div className={`border-2 ${colors.borderColor} rounded-lg overflow-hidden`}>
-                      <div className="overflow-x-auto max-h-64">
-                        <div className="flex">
-                          {/* 左侧固定列 - 字段名 */}
-                          <div className="flex-shrink-0 sticky left-0 z-10">
-                            {availableColumns.filter(col => col.selected).map((col) => (
-                              <div
-                                key={col.name}
-                                className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white bg-gray-900' : `text-gray-900 bg-white`} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}
-                              >
-                                {col.name}
+                              <div className="flex-1">
+                                <div className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{col.name}</div>
+                                <div className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mt-1 space-y-1`}>
+                                  {col.previewData.slice(0, 5).map((val, idx) => (
+                                    <div key={idx}>{typeof val === 'number' ? val.toLocaleString() : val}</div>
+                                  ))}
+                                </div>
                               </div>
-                            ))}
+                            </div>
                           </div>
-
-                          {/* 右侧数据列 - 显示前10列 */}
-                          <div className="flex">
-                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((colIdx) => (
-                              <div key={colIdx} className="flex-shrink-0">
-                                {availableColumns.filter(col => col.selected).map((col) => (
-                                  <div
-                                    key={`${col.name}-${colIdx}`}
-                                    className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300 bg-gray-900' : `text-gray-700 bg-white`} border-b border-l ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} min-w-[120px] text-center`}
-                                  >
-                                    {col.previewData[colIdx] !== undefined
-                                      ? typeof col.previewData[colIdx] === 'number'
-                                        ? Number(col.previewData[colIdx]).toLocaleString()
-                                        : col.previewData[colIdx]
-                                      : '-'}
-                                  </div>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     </div>
-
-                    {/* 已选择特征数量 - 添加提示 */}
-                    <div className="space-y-1">
-                      <div className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        已选择 <span className="font-semibold text-lg">{availableColumns.filter(c => c.selected).length}</span> 个特征字段进行建模
-                      </div>
-                      <div className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} flex items-start gap-1`}>
-                        <i className="ri-information-line text-sm mt-0.5"></i>
-                        <span>除日期列外，最多可选择2个特征字段用于模型训练</span>
-                      </div>
-                    </div>
-
-                    {/* 操作按钮 */}
                     <div className="flex gap-3">
-                      <button
-                        onClick={handleCancelImport}
-                        className={`px-6 py-2 ${theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} text-sm font-medium rounded-lg cursor-pointer whitespace-nowrap`}
-                      >
-                        取消
-                      </button>
                       <button
                         onClick={handleConfirmImport}
                         className={`flex-1 px-4 py-2 ${getHighlightStyle()} text-sm font-medium rounded-lg hover:opacity-90 cursor-pointer whitespace-nowrap`}
                       >
-                        确认并导入
+                        确认导入数据
+                      </button>
+                      <button
+                        onClick={handleCancelImport}
+                        className={`px-4 py-2 ${theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} text-sm font-medium rounded-lg cursor-pointer whitespace-nowrap`}
+                      >
+                        取消
                       </button>
                     </div>
                   </div>
@@ -752,58 +565,47 @@ export default function ModelBuilding() {
                 </div>
               </div>
               {importedDataList.length > 0 ? (
-                <div className={`border-2 ${colors.borderColor} rounded-lg overflow-hidden`}>
-                  <div className="overflow-x-auto max-h-64">
-                    <div className="flex">
-                      {/* 左侧固定列 - 字段名 */}
-                      <div className="flex-shrink-0 sticky left-0 z-10">
-                        {importedDataList[0].columns.map((col) => (
-                          <div
-                            key={col.name}
-                            className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white bg-gray-900' : `text-gray-900 bg-white`} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}
-                          >
+                <div className="overflow-x-auto">
+                  <div className="flex gap-6">
+                    {/* 表头列 */}
+                    <div className="flex-shrink-0">
+                      <div className={`${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} border-2 ${colors.borderColor} px-4 py-2 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-sm mb-2`}>
+                        表头
+                      </div>
+                      {importedDataList[0].columns.map((col) => (
+                        <div key={col.name} className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+                          {col.name}
+                        </div>
+                      ))}
+                      {importedDataList.slice(1).map((data) => (
+                        data.columns.filter(c => c.name !== data.dateColumn).map((col) => (
+                          <div key={`${data.dataId}-${col.name}`} className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
                             {col.name}
                           </div>
-                        ))}
-                        {importedDataList.slice(1).map((data) => (
-                          data.columns.filter(c => c.name !== data.dateColumn).map((col) => (
-                            <div
-                              key={`${data.dataId}-${col.name}`}
-                              className={`px-4 py-2 text-sm font-medium ${theme === 'dark' ? 'text-white bg-gray-900' : `text-gray-900 bg-white`} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}
-                            >
-                              {col.name}
-                            </div>
-                          ))
-                        ))}
-                      </div>
-
-                      {/* 右侧数据列 - 显示前10列 */}
-                      <div className="flex">
-                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((colIdx) => (
+                        ))
+                      ))}
+                    </div>
+                    {/* 数据列 */}
+                    <div className="flex-1 overflow-x-auto">
+                      <div className="flex gap-4">
+                        {[0, 1, 2, 3, 4].map((colIdx) => (
                           <div key={colIdx} className="flex-shrink-0">
+                            <div className={`${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} border-2 ${colors.borderColor} px-4 py-2 text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-center mb-2 w-32`}>
+                              数据 {colIdx + 1}
+                            </div>
                             {importedDataList[0].columns.map((col) => (
-                              <div
-                                key={col.name}
-                                className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300 bg-gray-900' : `text-gray-700 bg-white`} border-b border-l ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} min-w-[120px] text-center`}
-                              >
-                                {col.previewData[colIdx] !== undefined
-                                  ? typeof col.previewData[colIdx] === 'number'
-                                    ? Number(col.previewData[colIdx]).toLocaleString()
-                                    : col.previewData[colIdx]
-                                  : '-'}
+                              <div key={col.name} className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} w-32 text-center`}>
+                                {typeof col.previewData[colIdx] === 'number'
+                                  ? Number(col.previewData[colIdx]).toLocaleString()
+                                  : col.previewData[colIdx]}
                               </div>
                             ))}
                             {importedDataList.slice(1).map((data) => (
                               data.columns.filter(c => c.name !== data.dateColumn).map((col) => (
-                                <div
-                                  key={`${data.dataId}-${col.name}`}
-                                  className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300 bg-gray-900' : `text-gray-700 bg-white`} border-b border-l ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} min-w-[120px] text-center`}
-                                >
-                                  {col.previewData[colIdx] !== undefined
-                                    ? typeof col.previewData[colIdx] === 'number'
-                                      ? Number(col.previewData[colIdx]).toLocaleString()
-                                      : col.previewData[colIdx]
-                                    : '-'}
+                                <div key={`${data.dataId}-${col.name}`} className={`px-4 py-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} w-32 text-center`}>
+                                  {typeof col.previewData[colIdx] === 'number'
+                                    ? Number(col.previewData[colIdx]).toLocaleString()
+                                    : col.previewData[colIdx]}
                                 </div>
                               ))
                             ))}
@@ -876,8 +678,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>AR阶数 (p)</label>
                           <input
                             type="number"
-                            value={armaParams.p}
-                            onChange={(e) => setArmaParams({ ...armaParams, p: parseInt(e.target.value) || 0 })}
+                            defaultValue="2"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -885,8 +686,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>MA阶数 (q)</label>
                           <input
                             type="number"
-                            value={armaParams.q}
-                            onChange={(e) => setArmaParams({ ...armaParams, q: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -905,8 +705,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>AR阶数 (p)</label>
                           <input
                             type="number"
-                            value={arimaParams.p}
-                            onChange={(e) => setArimaParams({ ...arimaParams, p: parseInt(e.target.value) || 0 })}
+                            defaultValue="2"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -914,8 +713,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>差分阶数 (d)</label>
                           <input
                             type="number"
-                            value={arimaParams.d}
-                            onChange={(e) => setArimaParams({ ...arimaParams, d: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -923,8 +721,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>MA阶数 (q)</label>
                           <input
                             type="number"
-                            value={arimaParams.q}
-                            onChange={(e) => setArimaParams({ ...arimaParams, q: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -941,21 +738,16 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>ARCH阶数 (q)</label>
                           <input
                             type="number"
-                            value={archParams.q}
-                            onChange={(e) => setArchParams({ ...archParams, q: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
                         <div>
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>分布假设</label>
-                          <select
-                            value={archParams.dist}
-                            onChange={(e) => setArchParams({ ...archParams, dist: e.target.value as 'normal' | 't' | 'ged' })}
-                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
-                          >
-                            <option value="normal">正态分布</option>
-                            <option value="t">t分布</option>
-                            <option value="ged">GED分布</option>
+                          <select className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                            <option>正态分布</option>
+                            <option>t分布</option>
+                            <option>GED分布</option>
                           </select>
                         </div>
                       </>
@@ -967,8 +759,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>ARCH阶数 (p)</label>
                           <input
                             type="number"
-                            value={garchParams.p}
-                            onChange={(e) => setGarchParams({ ...garchParams, p: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -976,21 +767,16 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>GARCH阶数 (q)</label>
                           <input
                             type="number"
-                            value={garchParams.q}
-                            onChange={(e) => setGarchParams({ ...garchParams, q: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
                         <div>
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>分布类型</label>
-                          <select
-                            value={garchParams.dist}
-                            onChange={(e) => setGarchParams({ ...garchParams, dist: e.target.value as 'normal' | 't' | 'ged' })}
-                            className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
-                          >
-                            <option value="normal">正态分布</option>
-                            <option value="t">t分布</option>
-                            <option value="ged">GED分布</option>
+                          <select className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 cursor-pointer ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                            <option>正态分布</option>
+                            <option>t分布</option>
+                            <option>GED分布</option>
                           </select>
                         </div>
                       </>
@@ -1002,8 +788,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>滞后阶数</label>
                           <input
                             type="number"
-                            value={varParams.lags}
-                            onChange={(e) => setVarParams({ ...varParams, lags: parseInt(e.target.value) || 0 })}
+                            defaultValue="2"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -1025,8 +810,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>协整秩</label>
                           <input
                             type="number"
-                            value={vecmParams.coint_rank}
-                            onChange={(e) => setVecmParams({ ...vecmParams, coint_rank: parseInt(e.target.value) || 0 })}
+                            defaultValue="1"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>
@@ -1034,8 +818,7 @@ export default function ModelBuilding() {
                           <label className={`block text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-2`}>滞后阶数</label>
                           <input
                             type="number"
-                            value={vecmParams.lags}
-                            onChange={(e) => setVecmParams({ ...vecmParams, lags: parseInt(e.target.value) || 0 })}
+                            defaultValue="2"
                             className={`w-full px-3 py-2 text-sm border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`}
                           />
                         </div>

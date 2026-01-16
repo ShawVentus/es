@@ -14,6 +14,8 @@ from src.server.core.dependencies import Container
 from src.server.domain.types import AssetSearchQuery, AssetType
 from src.server.utils.logger import logger
 from src.server.utils.decorators import auto_offload
+from src.server.config.category_mapping import get_category
+from src.server.utils.data_cleaner import clean_csv_for_storage
 
 
 # ============================================================
@@ -267,14 +269,17 @@ def register_asset_tools(mcp: FastMCP):
                 logger.warning("⚠️ No user_id found from any source, using 'anonymous'")
             
             logger.info(f"🔍 [DEBUG] 最终使用的 user_id: {user_id}")
-            
+
+            # 清洗数据：删除空值，规范化日期
+            df_cleaned = clean_csv_for_storage(df)
+
             # 使用 DatasetManager 保存
             dataset_mgr = get_dataset_manager()
             result = dataset_mgr.save_dataset(
                 user_id=user_id,
-                df=df,
+                df=df_cleaned,
                 filename=filename.strip(),
-                category="Stock"
+                category=get_category("get_historical_prices")
             )
             
             if not result.get("success"):

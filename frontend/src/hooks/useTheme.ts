@@ -1,16 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useRecoilState } from 'recoil';
+import { themeState } from '../store/themeStore';
 import type { ThemeColor } from '../components/feature/ThemeSelector';
 
 export function useTheme() {
-  const [theme, setTheme] = useState<ThemeColor>(() => {
-    const saved = localStorage.getItem('theme');
-    return (saved as ThemeColor) || 'pink';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
+  const [theme, setTheme] = useRecoilState(themeState);
   return { theme, setTheme };
 }
 

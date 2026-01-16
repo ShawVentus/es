@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme, getThemeColors } from '../../hooks/useTheme';
 import Header from '../../components/common/Header';
@@ -8,6 +8,8 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { listReports, deleteReport, type ReportMeta, getReportDownloadUrl } from '../../api/reports';
+import { renderAsync } from 'docx-preview';
 
 interface ModelReport {
   id: string;
@@ -36,8 +38,47 @@ export default function ReportAnalysis() {
   const [editedContent, setEditedContent] = useState(mockReportContent);
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [showBatchActions, setShowBatchActions] = useState(false);
+  const [realReports, setRealReports] = useState<ModelReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
+  const [showMockWarning, setShowMockWarning] = useState(true);
+  const [loadingDocx, setLoadingDocx] = useState(false);
+  const docxContainerRef = useRef<HTMLDivElement>(null);
 
-  const reports: ModelReport[] = [
+  // Fetch real reports on mount
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const result = await listReports();
+        if (result.success && result.reports.length > 0) {
+          // Convert API response to ModelReport format
+          const convertedReports: ModelReport[] = result.reports.map((r: ReportMeta) => ({
+            id: r.report_id,
+            name: r.report_name,
+            modelType: r.model_type,
+            dataSource: r.data_source,
+            createdAt: new Date(r.created_at * 1000), // Unix timestamp to Date
+            status: 'completed' as const,
+            metrics: {
+              aic: r.metrics.aic || 0,
+              bic: r.metrics.bic || 0,
+              logLikelihood: 0, // Not in meta
+              rsquared: r.metrics.r2
+            }
+          }));
+          setRealReports(convertedReports);
+          setShowMockWarning(false); // Hide warning if we have real data
+        }
+      } catch (error) {
+        console.error('Failed to fetch reports:', error);
+      } finally {
+        setLoadingReports(false);
+      }
+    };
+
+    fetchReports();
+  }, []);
+
+  const mockReports: ModelReport[] = [
     {
       id: '1',
       name: '上证指数GARCH(1,1)模型',
@@ -152,6 +193,9 @@ export default function ReportAnalysis() {
     }
   ];
 
+  // Use real reports if available, otherwise fall back to mock data
+  const reports = realReports.length > 0 ? realReports : mockReports;
+
   const filteredReports = reports.filter(report =>
     report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     report.modelType.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -159,6 +203,39 @@ export default function ReportAnalysis() {
   );
 
   const currentReport = filteredReports.find(r => r.id === selectedReport);
+
+  // Load DOCX preview when a real report is selected
+  useEffect(() => {
+    const loadDocxPreview = async () => {
+      if (!currentReport || !realReports.find(r => r.id === currentReport.id)) {
+        return; // Only load DOCX for real reports
+      }
+
+      if (!docxContainerRef.current) return;
+
+      setLoadingDocx(true);
+      try {
+        const url = getReportDownloadUrl(currentReport.id);
+        const response = await fetch(url);
+        const blob = await response.blob();
+
+        // Clear previous content
+        docxContainerRef.current.innerHTML = '';
+
+        // Render DOCX
+        await renderAsync(blob, docxContainerRef.current);
+      } catch (error) {
+        console.error('Failed to load DOCX:', error);
+        if (docxContainerRef.current) {
+          docxContainerRef.current.innerHTML = '<div class="text-red-500 p-4">加载报告失败</div>';
+        }
+      } finally {
+        setLoadingDocx(false);
+      }
+    };
+
+    loadDocxPreview();
+  }, [selectedReport, currentReport, realReports]);
 
   const getHighlightStyle = () => {
     if (theme === 'light') {
@@ -226,8 +303,28 @@ export default function ReportAnalysis() {
       {/* Header */}
       <Header />
 
+      {/* Mock Data Warning Banner */}
+      {showMockWarning && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center">
+              <i className="ri-error-warning-line text-yellow-400 text-xl mr-3"></i>
+              <p className="text-sm text-yellow-800">
+                <span className="font-medium">这是模拟数据</span> - 生成报告即可看到自己的报告
+              </p>
+            </div>
+            <button
+              onClick={() => setShowMockWarning(false)}
+              className="text-yellow-800 hover:text-yellow-900"
+            >
+              <i className="ri-close-line text-xl"></i>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className={`flex ${showMockWarning ? 'h-[calc(100vh-73px-56px)]' : 'h-[calc(100vh-73px)]'}`}>
         {/* Left Sidebar - Report List */}
         <div className={`w-80 ${theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white'} border-r-2 ${colors.borderColor} flex flex-col`}>
           <div className={`p-4 border-b-2 ${colors.borderColor}`}>
@@ -419,16 +516,19 @@ export default function ReportAnalysis() {
                       {/* Edit Controls */}
                       <div className="flex items-center justify-between mb-4">
                         <h3 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>研究报告</h3>
-                        <button
-                          onClick={() => setIsEditing(!isEditing)}
-                          className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 whitespace-nowrap cursor-pointer ${isEditing
-                              ? getHighlightStyle()
-                              : theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                          <i className={`ri-${isEditing ? 'save' : 'edit'}-line text-lg`}></i>
-                          {isEditing ? '保存' : '编辑'}
-                        </button>
+                        {/* Hide edit button for real reports */}
+                        {!realReports.find(r => r.id === selectedReport) && (
+                          <button
+                            onClick={() => setIsEditing(!isEditing)}
+                            className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 whitespace-nowrap cursor-pointer ${isEditing
+                                ? getHighlightStyle()
+                                : theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                          >
+                            <i className={`ri-${isEditing ? 'save' : 'edit'}-line text-lg`}></i>
+                            {isEditing ? '保存' : '编辑'}
+                          </button>
+                        )}
                       </div>
 
                       {/* Model Information */}
@@ -486,7 +586,17 @@ export default function ReportAnalysis() {
                             className={`w-full h-[600px] p-4 text-sm font-mono border-2 ${colors.borderColor} rounded-lg focus:outline-none focus:ring-2 resize-none ${theme === 'dark' ? 'bg-gray-800 text-white placeholder-gray-500' : 'bg-white'}`}
                             placeholder="在此编辑报告内容（Markdown格式）..."
                           />
+                        ) : realReports.find(r => r.id === selectedReport) ? (
+                          // DOCX Preview for real reports
+                          <div ref={docxContainerRef} className={`docx-preview-container ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} p-6`}>
+                            {loadingDocx && (
+                              <div className="flex items-center justify-center h-64">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                              </div>
+                            )}
+                          </div>
                         ) : (
+                          // Markdown Preview for mock reports
                           <div ref={reportContentRef} className={`prose prose-sm max-w-none markdown-content ${theme === 'dark' ? 'prose-invert' : ''}`}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm, remarkMath]}

@@ -24,6 +24,7 @@ from src.server.api.routes import market_data_router, filings_router
 from src.server.core.dependencies import Container
 from src.server.utils.logger import logger
 from src.server.utils.request_context import set_current_user_id, clear_current_user_id
+from src.server.utils.user_id_resolver import get_user_id_resolver
 
 
 class UserIdMiddleware(BaseHTTPMiddleware):
@@ -36,25 +37,44 @@ class UserIdMiddleware(BaseHTTPMiddleware):
     - 使MCP工具可以访问当前用户ID进行文件存储隔离
     """
     async def dispatch(self, request: Request, call_next):
-        # 从请求头提取用户ID
-        user_id = request.headers.get('X-User-Id')
+        # 1. 从请求头提取X-User-Id (可能是ObjectId或邮箱)
+        user_id_from_header = request.headers.get('X-User-Id')
+        
+        # 2. 从Authorization header提取JWT token
+        auth_header = request.headers.get('Authorization')
         
         # 🔍 调试：输出所有请求头
         logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] 请求路径: {request.url.path}")
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] 所有请求头: {dict(request.headers)}")
+        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] X-User-Id: {user_id_from_header}")
+        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] Authorization: {'Bearer ...' if auth_header else 'None'}")
         
-        if user_id:
-            set_current_user_id(user_id)
-            logger.info(f"[UserIdMiddleware] ✅ 成功设置用户ID: {user_id}")
+        # 3. 尝试从JWT提取邮箱并注册映射
+        resolved_email = None
+        if auth_header and user_id_from_header:
+            # 提取Bearer token
+            if auth_header.startswith('Bearer '):
+                jwt_token = auth_header[7:]  # 移除 "Bearer " 前缀
+                
+                # 使用resolver解析JWT
+                resolver = get_user_id_resolver()
+                resolved_email = resolver.register_from_jwt(user_id_from_header, jwt_token)
+        
+        # 4. 确定最终使用的用户ID（优先使用邮箱）
+        final_user_id = resolved_email or user_id_from_header
+        
+        if final_user_id:
+            set_current_user_id(final_user_id)
+            if resolved_email:
+                logger.info(f"[UserIdMiddleware] ✅ 使用邮箱作为用户ID: {final_user_id}")
+            else:
+                logger.info(f"[UserIdMiddleware] ✅ 使用原始用户ID: {final_user_id}")
         else:
             logger.warning(f"[UserIdMiddleware] ⚠️ 未找到X-User-Id请求头！")
         
-        try:
-            response = await call_next(request)
-            return response
-        finally:
-            # 请求结束后清除上下文
-            clear_current_user_id()
+        # contextvars会自动管理生命周期，无需手动清除
+        # 这确保异步执行的MCP工具能够正确获取用户ID
+        response = await call_next(request)
+        return response
 
 
 def create_app():
@@ -224,6 +244,10 @@ def create_app():
             },
             {"name": "Health", "description": "健康检查 - 服务状态监控"},
             {"name": "Root", "description": "根路径 - 服务信息"},
+            {"name": "Preprocessing", "description": "数据预处理 - 清洗、转换和统计"},
+            {"name": "Statistics", "description": "统计检验 - 单变量和多变量检验"},
+            {"name": "Models", "description": "时序模型 - ARIMA/GARCH/VAR/VECM建模"},
+            {"name": "Reports", "description": "报告生成 - Word学术报告生成与下载"},
         ],
     )
 
@@ -252,11 +276,31 @@ def create_app():
     from src.server.api.routes.files import router as files_router
     app.include_router(files_router, tags=["Files"])
 
+    # 5.2 Register Preprocessing API router (数据预处理)
+    from src.server.api.routes.preprocessing import router as preprocessing_router
+    app.include_router(preprocessing_router, tags=["Preprocessing"])
+
+    # 5.3 Register Statistics API router (统计检验)
+    from src.server.api.routes.statistics import router as statistics_router
+    app.include_router(statistics_router, tags=["Statistics"])
+
+    # 5.4 Register Models API router (时序模型)
+    from src.server.api.routes.models import router as models_router
+    app.include_router(models_router, tags=["Models"])
+
+    # 5.5 Register Reports API router (报告生成)
+    from src.server.api.routes.reports import router as reports_router
+    app.include_router(reports_router, tags=["Reports"])
+
     logger.info("✅ RESTful API routes registered")
     logger.info("   - Health check: /health")
     logger.info("   - Market data: /api/v1/market/*")
     logger.info("   - Filings: /api/v1/filings/*")
     logger.info("   - Files: /api/v1/files/*")
+    logger.info("   - Preprocessing: /api/preprocessing/*")
+    logger.info("   - Statistics: /api/statistics/*")
+    logger.info("   - Models: /api/models/*")
+    logger.info("   - Reports: /api/reports/*")
 
     # 6. Mount MCP protocol endpoint
     if mcp_app:

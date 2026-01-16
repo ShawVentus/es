@@ -111,7 +111,7 @@ def create_mcp_server() -> FastMCP:
         FastMCP: MCP server instance with all tools and tags
     """
     # Create MCP instance with lifespan
-    mcp = FastMCP(name="stock-tool-mcp", version="1.0.0", lifespan=mcp_lifespan)
+    mcp = FastMCP(name="easystat", version="1.0.0", lifespan=mcp_lifespan)
 
     # Register all tool groups with their respective tags
     logger.info("📦 Registering tool groups...")
@@ -127,6 +127,14 @@ def create_mcp_server() -> FastMCP:
     from src.server.mcp.tools.trade_tools import register_trade_tools
     from src.server.mcp.tools.chunking_tools import register_chunking_tools
     from src.server.mcp.tools.system_tools import register_system_tools
+
+    # Import AKShare tool registration functions
+    from src.server.mcp.tools.akshare_macro_tools import register_akshare_macro_tools
+    from src.server.mcp.tools.akshare_rate_tools import register_akshare_rate_tools
+    from src.server.mcp.tools.akshare_forex_tools import register_akshare_forex_tools
+    from src.server.mcp.tools.akshare_derivatives_tools import register_akshare_derivatives_tools
+    from src.server.mcp.tools.akshare_bond_spot_tools import register_akshare_bond_spot_tools
+    from src.server.mcp.tools.akshare_index_other_tools import register_akshare_index_other_tools
 
     # Register core tools
     register_fundamental_tools(mcp)
@@ -158,11 +166,30 @@ def create_mcp_server() -> FastMCP:
     register_system_tools(mcp)
     logger.info("  ✓ System tools registered (1 tool)")
 
-    logger.info("✅ MCP server created with all tools")
+    # 注册AKShare工具 (39个数据获取工具)
+    register_akshare_macro_tools(mcp)
+    logger.info("  ✓ AKShare macro tools registered (24 tools)")
+
+    register_akshare_rate_tools(mcp)
+    logger.info("  ✓ AKShare rate tools registered (4 tools)")
+
+    register_akshare_forex_tools(mcp)
+    logger.info("  ✓ AKShare forex tools registered (4 tools)")
+
+    register_akshare_derivatives_tools(mcp)
+    logger.info("  ✓ AKShare derivatives tools registered (3 tools)")
+
+    register_akshare_bond_spot_tools(mcp)
+    logger.info("  ✓ AKShare bond/spot tools registered (3 tools)")
+
+    register_akshare_index_other_tools(mcp)
+    logger.info("  ✓ AKShare index/other tools registered (8 tools)")
+
+    logger.info("✅ MCP server created with all tools (including 39 AKShare tools)")
 
     # Print simple startup banner
     logger.info("\n" + "=" * 70)
-    logger.info("🚀 Stock Tool MCP Server")
+    logger.info("🚀 EasySTAT Financial Data Server")
     logger.info("=" * 70)
     logger.info("\n📋 Server Information:")
     logger.info(f"   Name: {mcp.name}")
@@ -194,13 +221,13 @@ def create_filtered_mcp_server(
         # Create a market-focused server
         market_server = create_filtered_mcp_server(
             include_tags={"market"},
-            name="stock-market-mcp"
+            name="easystat-market"
         )
 
     Args:
         include_tags: Only include tools with these tags
         exclude_tags: Exclude tools with these tags
-        name: Custom server name (defaults to "stock-tool-mcp-filtered")
+        name: Custom server name (defaults to "easystat-filtered")
 
     Returns:
         FastMCP: Filtered MCP server instance
@@ -213,7 +240,7 @@ def create_filtered_mcp_server(
     from src.server.mcp.tools.filings_tools import register_filings_tools
     from src.server.mcp.tools.trade_tools import register_trade_tools
 
-    server_name = name or "stock-tool-mcp-filtered"
+    server_name = name or "easystat-filtered"
 
     mcp = FastMCP(
         name=server_name,
@@ -295,8 +322,7 @@ def get_tools_by_tag(tag: str) -> list[str]:
 def get_server_info() -> dict:
     """Get MCP server information."""
     return {
-        "name": "Stock Tool MCP",
-        "version": "1.0.0",
+        "name": "EasySTAT",
         "version": "1.0.0",
         "total_tools": 22,
         "tags": {

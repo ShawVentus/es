@@ -17,27 +17,22 @@ def load_and_clean_data(filepath, timestamp_col='timestamp', value_col='close_pr
         else:
             raise ValueError(f"Column {timestamp_col} not found in {filepath}")
 
-        # 步骤1: 填充缺失值（而非删除）
-        initial_missing = df[value_col].isna().sum()
-        df[value_col] = df[value_col].ffill()
-        remaining_missing = df[value_col].isna().sum()
-        if remaining_missing > 0:
-            df[value_col] = df[value_col].bfill()
-            logging.info(f"开头有 {remaining_missing} 个缺失值，使用后值填充")
-        logging.info(f"填充了 {initial_missing} 个缺失值")
+        # Drop NaNs
+        initial_len = len(df)
+        df = df.dropna(subset=[value_col])
+        if len(df) < initial_len:
+            logging.info(f"Dropped {initial_len - len(df)} NaN rows from {filepath}")
 
-        # 步骤2: 3σ法则检测并填充异常值（而非删除）
+        # Remove Extreme Outliers (Mean +/- 3*Std)
         mean_val = df[value_col].mean()
         std_val = df[value_col].std()
         upper_bound = mean_val + 3 * std_val
         lower_bound = mean_val - 3 * std_val
-
-        outlier_mask = (df[value_col] > upper_bound) | (df[value_col] < lower_bound)
-        outlier_count = outlier_mask.sum()
-        if outlier_count > 0:
-            logging.info(f"检测到 {outlier_count} 个异常值（3σ法则），用前值填充")
-            df.loc[outlier_mask, value_col] = np.nan
-            df[value_col] = df[value_col].ffill()
+        
+        outliers = df[(df[value_col] > upper_bound) | (df[value_col] < lower_bound)]
+        if not outliers.empty:
+            logging.info(f"Removing {len(outliers)} extreme outliers from {filepath}")
+            df = df[(df[value_col] <= upper_bound) & (df[value_col] >= lower_bound)]
 
         return df
     except Exception as e:
