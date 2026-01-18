@@ -20,7 +20,7 @@ function getCurrentUserId(): string {
   const userStr = localStorage.getItem('librechat_user');
 
   if (!userStr) {
-    throw new Error('未登录：请先访问 LibreChat (http://localhost:3080) 登录后再使用本系统');
+    throw new Error('未登录：请先访问 LibreChat (/librechat) 登录后再使用本系统');
   }
 
   try {

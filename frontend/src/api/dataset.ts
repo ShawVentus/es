@@ -87,7 +87,7 @@ export function buildHeaders(): HeadersInit {
     const userStr = localStorage.getItem('librechat_user');
 
     if (!userStr) {
-        throw new Error('未登录：请先访问 LibreChat (http://localhost:3080) 登录后再使用本系统');
+        throw new Error('未登录：请先访问 LibreChat (/librechat) 登录后再使用本系统');
     }
 
     let userId: string;
@@ -104,7 +104,7 @@ export function buildHeaders(): HeadersInit {
 
             throw new Error(
                 '用户信息已过期：缺少用户 ObjectId。\n' +
-                '已自动清除旧数据，请重新访问 LibreChat (http://localhost:3080) 登录。\n' +
+                '已自动清除旧数据，请重新访问 LibreChat (/librechat) 登录。\n' +
                 '登录后请刷新本页面。'
             );
         }
