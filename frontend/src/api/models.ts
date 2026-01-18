@@ -7,23 +7,37 @@
  * - VAR/VECM: 向量自回归模型
  */
 
-const API_BASE_URL = 'http://localhost:9898';
+// 开发模式和生产模式都使用相对路径
+// 开发模式：通过Vite proxy转发
+// 生产模式：通过nginx反向代理转发
+const API_BASE_URL = '';
 
 /**
  * 获取当前用户ID
  * 从localStorage获取LibreChat的用户信息
  */
 function getCurrentUserId(): string {
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      return user.id || user.email || 'anonymous';
-    }
-  } catch (e) {
-    console.warn('Failed to get user ID:', e);
+  const userStr = localStorage.getItem('librechat_user');
+
+  if (!userStr) {
+    throw new Error('未登录：请先访问 LibreChat (http://localhost:3080) 登录后再使用本系统');
   }
-  return 'anonymous';
+
+  try {
+    const user = JSON.parse(userStr);
+    const userId = user?.id;  // 强制使用 ObjectId
+
+    if (!userId) {
+      throw new Error('用户信息不完整：无法获取用户 ID 或邮箱');
+    }
+
+    return userId;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('用户信息不完整')) {
+      throw e;
+    }
+    throw new Error('用户信息解析失败：localStorage 数据格式错误');
+  }
 }
 
 /**
@@ -41,7 +55,11 @@ async function apiRequest<T>(endpoint: string, body: any): Promise<T> {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API请求失败: ${response.status}`);
+    // 处理 FastAPI 的验证错误（detail 可能是数组或对象）
+    const errorMessage = typeof errorData.detail === 'string'
+      ? errorData.detail
+      : JSON.stringify(errorData.detail || errorData, null, 2);
+    throw new Error(errorMessage || `API请求失败: ${response.status}`);
   }
 
   return response.json();
@@ -131,6 +149,7 @@ export interface ModelResult {
     residuals: number[] | Record<string, number[]>;
   };
   saved_path: string;
+  report_id?: string;
   message?: string;
 }
 

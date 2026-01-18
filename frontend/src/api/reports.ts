@@ -4,22 +4,36 @@
  * 提供报告生成、列表查询、删除、下载功能
  */
 
-const API_BASE_URL = 'http://localhost:9898';
+// 开发模式和生产模式都使用相对路径
+// 开发模式：通过Vite proxy转发
+// 生产模式：通过nginx反向代理转发
+const API_BASE_URL = '';
 
 /**
  * 获取当前用户ID
  */
-function getCurrentUserId(): string {
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      return user.id || user.email || 'anonymous';
-    }
-  } catch (e) {
-    console.warn('Failed to get user ID:', e);
+export function getCurrentUserId(): string {
+  const userStr = localStorage.getItem('librechat_user');
+
+  if (!userStr) {
+    throw new Error('未登录：请先访问 LibreChat (http://localhost:3080) 登录后再使用本系统');
   }
-  return 'anonymous';
+
+  try {
+    const user = JSON.parse(userStr);
+    const userId = user?.id;  // 强制使用 ObjectId
+
+    if (!userId) {
+      throw new Error('用户信息不完整：无法获取用户 ID 或邮箱');
+    }
+
+    return userId;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('用户信息不完整')) {
+      throw e;
+    }
+    throw new Error('用户信息解析失败：localStorage 数据格式错误');
+  }
 }
 
 /**
@@ -37,7 +51,11 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API请求失败: ${response.status}`);
+    // 处理 FastAPI 的验证错误（detail 可能是数组或对象）
+    const errorMessage = typeof errorData.detail === 'string'
+      ? errorData.detail
+      : JSON.stringify(errorData.detail || errorData, null, 2);
+    throw new Error(errorMessage || `API请求失败: ${response.status}`);
   }
 
   return response.json();
@@ -90,6 +108,13 @@ export interface DeleteReportResult {
   message: string;
 }
 
+export interface ReportDetailsResult {
+  success: boolean;
+  report_id: string;
+  meta: any;
+  model_result: any;
+}
+
 // ========== API函数 ==========
 
 /**
@@ -98,6 +123,9 @@ export interface DeleteReportResult {
  * @returns 生成结果
  */
 export async function generateReport(params: ReportGenerateParams): Promise<ReportGenerateResult> {
+  // 调试日志：输出实际发送的参数
+  console.log('[Debug] generateReport 请求参数:', JSON.stringify(params, null, 2));
+
   return apiRequest<ReportGenerateResult>('/api/reports/generate', {
     method: 'POST',
     body: JSON.stringify(params)
@@ -126,6 +154,17 @@ export async function deleteReport(reportId: string): Promise<DeleteReportResult
 }
 
 /**
+ * 获取报告详细信息（包含完整模型结果）
+ * @param reportId - 报告ID
+ * @returns 报告详细信息
+ */
+export async function getReportDetails(reportId: string): Promise<ReportDetailsResult> {
+  return apiRequest<ReportDetailsResult>(`/api/reports/${reportId}/details`, {
+    method: 'GET'
+  });
+}
+
+/**
  * 下载报告DOCX文件
  * @param reportId - 报告ID
  * @returns 下载URL（浏览器会自动下载）
@@ -135,15 +174,33 @@ export function getReportDownloadUrl(reportId: string): string {
 }
 
 /**
- * 触发报告下载
+ * 下载报告DOCX文件（使用fetch支持header传递）
  * @param reportId - 报告ID
  */
-export function downloadReport(reportId: string): void {
-  const url = getReportDownloadUrl(reportId);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${reportId}.docx`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+export async function downloadReportFile(reportId: string): Promise<void> {
+  try {
+    const url = getReportDownloadUrl(reportId);
+    const response = await fetch(url, {
+      headers: {
+        'X-User-Id': getCurrentUserId()
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${reportId}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error('下载报告失败:', error);
+    throw error;
+  }
 }

@@ -122,6 +122,9 @@ const refreshController = async (req, res) => {
         expires_at: claims.exp,
       };
 
+      // 🔧 添加 id 字段，确保前端可以获取 ObjectId
+      user.id = user._id.toString();
+
       return res.status(200).send({ token, user });
     } catch (error) {
       logger.error('[refreshController] OpenID token refresh error', error);
@@ -146,6 +149,8 @@ const refreshController = async (req, res) => {
 
     if (process.env.NODE_ENV === 'CI') {
       const token = await setAuthTokens(userId, res);
+      // 🔧 添加 id 字段，确保前端可以获取 ObjectId
+      user.id = user._id.toString();
       return res.status(200).send({ token, user });
     }
 
@@ -171,6 +176,9 @@ const refreshController = async (req, res) => {
       } catch (err) {
         logger.warn(`[refreshController] Cannot attempt OAuth MCP servers reconnection:`, err);
       }
+
+      // 🔧 添加 id 字段，确保前端可以获取 ObjectId
+      user.id = user._id.toString();
 
       res.status(200).send({ token, user });
     } else if (req?.query?.retry) {

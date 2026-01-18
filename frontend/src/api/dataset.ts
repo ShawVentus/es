@@ -7,10 +7,11 @@
  * 创建日期: 2026-01-13
  */
 
-// 后端 API 基础地址（从环境变量读取）
-// VITE_STOCK_MCP_URL: stock-mcp 服务地址
-// VITE_AGENT_URL: LibreChat 服务地址（用于 iframe）
-const API_BASE_URL = import.meta.env.VITE_STOCK_MCP_URL || 'http://localhost:9898';
+// 后端 API 基础地址
+// 开发模式和生产模式都使用相对路径
+// 开发模式：通过Vite proxy转发
+// 生产模式：通过nginx反向代理转发
+const API_BASE_URL = '';
 
 // 调试模式
 const DEBUG = import.meta.env.VITE_DEBUG_MODE === 'true';
@@ -30,6 +31,7 @@ export interface DatasetMeta {
     name: string;
     rows: number;
     cols: number;
+    size?: number;
     category: string;
     stats: {
         Min: number;
@@ -42,6 +44,7 @@ export interface DatasetMeta {
     };
     created_at: string;
     size_formatted: string;
+    columns?: string[];
 }
 
 /**
@@ -67,8 +70,10 @@ function getToken(): string | null {
 
 /**
  * 构建请求头（含 Authorization 和 X-User-Id）
+ *
+ * 导出供其他模块使用（如 billing.ts）
  */
-function buildHeaders(): HeadersInit {
+export function buildHeaders(): HeadersInit {
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
     };
@@ -80,23 +85,39 @@ function buildHeaders(): HeadersInit {
 
     // 从 localStorage 获取 user_id（LibreChat 登录后存储的）
     const userStr = localStorage.getItem('librechat_user');
-    if (userStr) {
-        try {
-            const user = JSON.parse(userStr);
-            // 优先使用 id，如果没有则使用 email 作为 fallback
-            const userId = user?.id || user?.email;
-            if (userId) {
-                headers['X-User-Id'] = userId;
-                debugLog('User ID from localStorage:', userId);
-            } else {
-                debugLog('Warning: No id or email found in user object:', user);
-            }
-        } catch (e) {
-            debugLog('Error parsing user from localStorage:', e);
-        }
-    } else {
-        debugLog('Warning: librechat_user not found in localStorage');
+
+    if (!userStr) {
+        throw new Error('未登录：请先访问 LibreChat (http://localhost:3080) 登录后再使用本系统');
     }
+
+    let userId: string;
+    try {
+        const user = JSON.parse(userStr);
+        // 🔧 强制使用 ObjectId，确保与后端存储路径一致
+        userId = user?.id;
+
+        if (!userId) {
+            // 清除旧的认证信息
+            localStorage.removeItem('librechat_user');
+            localStorage.removeItem('librechat_token');
+            localStorage.setItem('librechat_auth', 'false');
+
+            throw new Error(
+                '用户信息已过期：缺少用户 ObjectId。\n' +
+                '已自动清除旧数据，请重新访问 LibreChat (http://localhost:3080) 登录。\n' +
+                '登录后请刷新本页面。'
+            );
+        }
+
+        debugLog('User ID (ObjectId) from localStorage:', userId);
+    } catch (e) {
+        if (e instanceof Error && e.message.includes('用户信息已过期')) {
+            throw e;
+        }
+        throw new Error('用户信息解析失败：localStorage 数据格式错误');
+    }
+
+    headers['X-User-Id'] = userId;
 
     return headers;
 }

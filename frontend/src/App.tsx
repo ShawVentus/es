@@ -14,6 +14,7 @@ import { BrowserRouter } from "react-router-dom";
 import { AppRoutes } from "./router";
 import { LibreChatAuthProvider } from "./components/Auth/LibreChatAuth";
 import AgentIframe from "./components/Agent/AgentIframe";
+import ThemeEffect from "./components/common/ThemeEffect";
 
 /**
  * 根组件
@@ -25,9 +26,12 @@ function App() {
       {/* 1. 全局认证上下文包裹 */}
       <LibreChatAuthProvider>
 
-        {/* 2. 顶部状态提示条 (移至各页面的 Header 组件中) */}
+        {/* 2. 主题效果 - 更新全局CSS变量 */}
+        <ThemeEffect />
 
-        {/* 3. 路由主内容 (Suspense 支持懒加载) */}
+        {/* 3. 顶部状态提示条 (移至各页面的 Header 组件中) */}
+
+        {/* 4. 路由主内容 (Suspense 支持懒加载) */}
         <Suspense fallback={
           <div className="flex items-center justify-center min-h-screen">
             <div className="text-center">
@@ -39,7 +43,7 @@ function App() {
           <AppRoutes />
         </Suspense>
 
-        {/* 4. Agent 常驻容器 (Fixed Overlay) */}
+        {/* 5. Agent 常驻容器 (Fixed Overlay) */}
         {/* 注意：它在 Suspense 之外，不受路由切换影响 */}
         <AgentIframe />
 

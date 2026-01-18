@@ -159,13 +159,13 @@ class VARVECMService:
             for i, shock_var in enumerate(variables):
                 irf_data[shock_var] = {}
                 for j, response_var in enumerate(variables):
-                    # 脉冲响应值
-                    response = irf.irfs[:, j, i].tolist()
+                    # 脉冲响应值（将NaN转为None以支持JSON序列化）
+                    response = pd.Series(irf.irfs[:, j, i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
 
                     # 置信区间（如果计算成功）
                     try:
-                        lower = irf_err[0][:, j, i].tolist()
-                        upper = irf_err[1][:, j, i].tolist()
+                        lower = pd.Series(irf_err[0][:, j, i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
+                        upper = pd.Series(irf_err[1][:, j, i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
                     except:
                         lower = None
                         upper = None
@@ -208,7 +208,8 @@ class VARVECMService:
 
             decomp_data = {}
             for i, var in enumerate(var_result.names):
-                decomp_data[var] = fevd.decomp[i].tolist()
+                # 将NaN转为None以支持JSON序列化
+                decomp_data[var] = pd.Series(fevd.decomp[i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
 
             return {
                 "success": True,
@@ -320,10 +321,11 @@ class VARVECMService:
             for i, shock_var in enumerate(variables):
                 irf_data[shock_var] = {}
                 for j, response_var in enumerate(variables):
+                    # 将NaN转为None以支持JSON序列化
                     irf_data[shock_var][response_var] = {
-                        "response": original_irfs[:, j, i].tolist(),
-                        "ci_lower": ci_lower[:, j, i].tolist(),
-                        "ci_upper": ci_upper[:, j, i].tolist()
+                        "response": pd.Series(original_irfs[:, j, i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist(),
+                        "ci_lower": pd.Series(ci_lower[:, j, i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist(),
+                        "ci_upper": pd.Series(ci_upper[:, j, i]).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
                     }
 
             return {
@@ -402,12 +404,14 @@ class VARVECMService:
             metrics["r2_by_equation"] = r2_by_eq
             metrics["r2_average"] = float(np.mean(list(r2_by_eq.values())))
 
-            # 准备数据
+            # 准备数据（将NaN转为None以支持JSON序列化）
             fitted_data = {}
             resid_data = {}
             for col in df_clean.columns:
-                fitted_col = [None] * selected_lag + result.fittedvalues[col].tolist()
-                resid_col = [None] * selected_lag + result.resid[col].tolist()
+                fitted_series = pd.Series(result.fittedvalues[col]).replace({np.nan: None, np.inf: None, -np.inf: None})
+                resid_series = pd.Series(result.resid[col]).replace({np.nan: None, np.inf: None, -np.inf: None})
+                fitted_col = [None] * selected_lag + fitted_series.tolist()
+                resid_col = [None] * selected_lag + resid_series.tolist()
                 fitted_data[col] = fitted_col
                 resid_data[col] = resid_col
 
@@ -534,12 +538,14 @@ class VARVECMService:
             metrics["r2_average"] = float(np.mean(list(r2_by_eq.values())))
             metrics["n_observations"] = valid_len
 
-            # 准备数据
+            # 准备数据（将NaN转为None以支持JSON序列化）
             fitted_data = {}
             resid_data = {}
             for col in df_clean.columns:
-                fitted_col = [None] * start_idx + result.fittedvalues[col].tolist()
-                resid_col = [None] * start_idx + result.resid[col].tolist()
+                fitted_series = pd.Series(result.fittedvalues[col]).replace({np.nan: None, np.inf: None, -np.inf: None})
+                resid_series = pd.Series(result.resid[col]).replace({np.nan: None, np.inf: None, -np.inf: None})
+                fitted_col = [None] * start_idx + fitted_series.tolist()
+                resid_col = [None] * start_idx + resid_series.tolist()
                 fitted_data[col] = fitted_col
                 resid_data[col] = resid_col
 

@@ -27,7 +27,8 @@ const log = (message: string, ...args: unknown[]) => {
 };
 
 // 常量定义
-const AGENT_ORIGIN = import.meta.env.VITE_AGENT_URL;
+// postMessage需要完整origin，而不是路径
+const AGENT_ORIGIN = window.location.origin;
 const LIBRECHAT_MESSAGE_PREFIX = 'LIBRECHAT_';
 
 /**

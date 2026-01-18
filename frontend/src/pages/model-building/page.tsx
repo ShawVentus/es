@@ -10,6 +10,8 @@ import {
   fitARIMA, fitARMA, fitGARCH, fitARCH, fitVAR, fitVECM,
   type ModelResult
 } from '../../api/models';
+import { generateReport } from '../../api/reports';
+import { runUnivariateTests, runMultivariateTests, getDescriptiveStats } from '../../api/statistics';
 
 /**
  * 统一的日期列识别函数
@@ -76,7 +78,11 @@ export default function ModelBuilding() {
 
   // Initialize with pre-selected data if available
   useEffect(() => {
+    console.log('🔍 preSelectedData:', preSelectedData);
+    console.log('🔍 localStorage:', localStorage.getItem('selectedDataForModel'));
+
     if (preSelectedData) {
+      console.log('✅ 使用 Recoil 状态:', preSelectedData.filename);
       handleDataSelect(preSelectedData.filename);
     }
     // Fallback to localStorage for refresh persistence (optional, keeping compatible with current flow)
@@ -336,9 +342,42 @@ export default function ModelBuilding() {
         return;
       }
 
+      // 1.1 判断是单变量还是多变量模型
+      const isMultivariate = selectedModel === 'var' || selectedModel === 'vecm';
+
+      // 1.2 运行统计检验
+      toast.loading('正在运行统计检验...', { id: 'building' });
+      let testResults: any;
+      let statsResults: any;
+
+      if (isMultivariate) {
+        // 多变量检验
+        testResults = await runMultivariateTests({
+          filenames: importedDataList.map(d => d.dataName),
+          value_col: valueColumn,
+          date_col: firstData.dateColumn
+        });
+        // 多变量描述性统计（使用第一个变量的统计，报告生成器会自动处理多变量格式）
+        statsResults = await getDescriptiveStats(
+          firstData.dataName,
+          valueColumn
+        );
+      } else {
+        // 单变量检验
+        testResults = await runUnivariateTests({
+          filename: firstData.dataName,
+          value_col: valueColumn
+        });
+        statsResults = await getDescriptiveStats(
+          firstData.dataName,
+          valueColumn
+        );
+      }
+
       let result: ModelResult;
 
       // 2. 根据模型类型调用对应API（传递日期范围）
+      toast.loading('正在拟合模型...', { id: 'building' });
       switch (selectedModel) {
         case 'arima':
           result = await fitARIMA({
@@ -445,17 +484,55 @@ export default function ModelBuilding() {
         modelName: modelTypes.find(m => m.id === selectedModel)?.name || selectedModel
       }));
 
-      // 5. 显示成功提示
-      toast.success('模型构建成功！正在跳转到报告页面...');
+      // 5. 生成报告
+      if (result.report_id) {
+        toast.loading('模型拟合完成，正在生成报告...', { id: 'building' });
 
-      // 6. 延迟跳转，让用户看到成功提示
-      setTimeout(() => {
-        navigate('/report-analysis');
-      }, 1000);
+        const reportResult = await generateReport({
+          report_id: result.report_id,
+          preprocessing_record: {
+            missing_count: 0,
+            outlier_count: 0,
+            log_applied: false,
+            diff_order: 0,
+            final_length: testResults.n_observations || 0
+          },
+          test_results: testResults.tests || {},
+          descriptive_stats: statsResults.statistics || {},
+          data_source_info: {
+            name: firstData.dataName,
+            source: 'user_upload',
+            date_range: `${dataStartDate || 'N/A'} ~ ${dataEndDate || 'N/A'}`,
+            original_count: testResults.n_observations || 0
+          },
+          model_type: selectedModel.toUpperCase()
+        });
+
+        if (!reportResult.success) {
+          throw new Error(reportResult.message || '报告生成失败');
+        }
+
+        localStorage.setItem('latestReportId', result.report_id);
+
+        // 延迟显示下一个状态，让用户看到"正在生成报告"
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        toast.success('报告生成完成！正在跳转...', { id: 'building' });
+
+        setTimeout(() => {
+          navigate('/report-analysis');
+        }, 1500);
+      } else {
+        toast.success('模型构建成功！正在跳转到报告页面...', { id: 'building' });
+        setTimeout(() => {
+          navigate('/report-analysis');
+        }, 1500);
+      }
 
     } catch (error: any) {
-      console.error('模型构建失败:', error);
-      toast.error(error.message || '模型构建失败，请检查数据和参数');
+      console.error('建模或报告生成失败:', error);
+      toast.error(error.message || '操作失败，请检查数据和参数', { id: 'building' });
+    } finally {
+      // 确保状态重置（跳转后组件卸载会自动清理）
       setIsBuilding(false);
     }
   };
@@ -503,7 +580,7 @@ export default function ModelBuilding() {
               <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                    <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800 border border-gray-600' : `bg-${colors.primaryLight}`}`}>
                       <i className={`ri-database-2-line text-${colors.primaryText} text-xl`}></i>
                     </div>
                     <div>
@@ -591,7 +668,7 @@ export default function ModelBuilding() {
               {/* 选择建模数据 */}
               <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
                 <div className="flex items-center gap-3 mb-5">
-                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800 border border-gray-600' : `bg-${colors.primaryLight}`}`}>
                     <i className={`ri-file-list-3-line text-${colors.primaryText} text-xl`}></i>
                   </div>
                   <div>
@@ -743,7 +820,7 @@ export default function ModelBuilding() {
             {/* Row 2: 建模数据 */}
             <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
               <div className="flex items-center gap-3 mb-5">
-                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800 border border-gray-600' : `bg-${colors.primaryLight}`}`}>
                   <i className={`ri-table-line text-${colors.primaryText} text-xl`}></i>
                 </div>
                 <div>
@@ -826,7 +903,7 @@ export default function ModelBuilding() {
               {/* 选择模型类型 - 占2列 */}
               <div className={`col-span-2 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
                 <div className="flex items-center gap-3 mb-5">
-                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800 border border-gray-600' : `bg-${colors.primaryLight}`}`}>
                     <i className={`ri-function-line text-${colors.primaryText} text-xl`}></i>
                   </div>
                   <div>
@@ -861,7 +938,7 @@ export default function ModelBuilding() {
               {/* 参数配置 - 占1列 */}
               <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-6`}>
                 <div className="flex items-center gap-3 mb-5">
-                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`}>
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-gray-800 border border-gray-600' : `bg-${colors.primaryLight}`}`}>
                     <i className={`ri-settings-3-line text-${colors.primaryText} text-xl`}></i>
                   </div>
                   <div>
@@ -1085,32 +1162,33 @@ export default function ModelBuilding() {
 
               {/* 建模提示 - 占1列 */}
               <div className={`${theme === 'dark' ? 'bg-gray-900' : `bg-gradient-to-br ${colors.gradient}`} rounded-xl border-2 ${colors.borderColor} p-6`}>
-                <div className="flex items-start gap-3 mb-4">
-                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-white' : theme === 'light' ? 'bg-gray-900' : `bg-${colors.primary}`}`}>
+                {/* 标题区域 */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-white border border-gray-300' : theme === 'light' ? 'bg-gray-900' : `bg-${colors.primary}`}`}>
                     <i className={`ri-lightbulb-line ${theme === 'dark' ? 'text-black' : 'text-white'} text-xl`}></i>
                   </div>
-                  <div>
-                    <h3 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-2`}>建模提示</h3>
-                    <ul className={`space-y-2 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <li className="flex items-start gap-2">
-                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
-                        <span>建议先进行数据平稳性检验</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
-                        <span>GARCH模型适用于波动率聚集的序列</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
-                        <span>VAR模型要求所有变量同阶平稳</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base mt-0.5 flex-shrink-0`}></i>
-                        <span>使用AIC/BIC准则选择最优阶数</span>
-                      </li>
-                    </ul>
-                  </div>
+                  <h3 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>建模提示</h3>
                 </div>
+
+                {/* 列表区域 */}
+                <ul className={`space-y-3 text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <li className="flex items-center gap-2">
+                    <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base flex-shrink-0`}></i>
+                    <span className="flex-1">建议先进行数据平稳性检验</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base flex-shrink-0`}></i>
+                    <span className="flex-1">GARCH模型适用于波动率聚集的序列</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base flex-shrink-0`}></i>
+                    <span className="flex-1">VAR模型要求所有变量同阶平稳</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <i className={`ri-check-line ${theme === 'dark' ? 'text-white' : theme === 'light' ? 'text-gray-900' : `text-${colors.primaryText}`} text-base flex-shrink-0`}></i>
+                    <span className="flex-1">使用AIC/BIC准则选择最优阶数</span>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>

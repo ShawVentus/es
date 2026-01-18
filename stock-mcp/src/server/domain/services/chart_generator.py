@@ -16,9 +16,28 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 配置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
+# ========== 配置中文字体（防御性编程）==========
+# 手动注册系统中的HeiTi字体
+HEITI_FONT_PATH = '/usr/share/fonts/truetype/heiti/HeiTi.ttf'
+if os.path.exists(HEITI_FONT_PATH):
+    try:
+        fm.fontManager.addfont(HEITI_FONT_PATH)
+        logger.info(f"✅ 已注册中文字体: {HEITI_FONT_PATH}")
+    except Exception as e:
+        logger.warning(f"⚠️ 注册字体失败: {e}")
+
+# 配置字体回退链（按优先级）
+# 注意：HeiTi.ttf的实际字体名称是"经典平黑简"
+plt.rcParams['font.sans-serif'] = ['经典平黑简', 'WenQuanYi Zen Hei', 'SimHei', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+# 启动时验证中文字体是否可用
+available_fonts = {f.name for f in fm.fontManager.ttflist}
+chinese_fonts_found = [font for font in ['经典平黑简', 'WenQuanYi Zen Hei', 'SimHei'] if font in available_fonts]
+if chinese_fonts_found:
+    logger.info(f"✅ 中文字体配置成功，可用字体: {chinese_fonts_found[0]}")
+else:
+    logger.error(f"⚠️ 未找到任何中文字体！图表中的中文可能显示为方框。可用字体示例: {list(available_fonts)[:5]}")
 
 # 学术风格配置
 ACADEMIC_STYLE = {
@@ -50,6 +69,10 @@ class ChartGenerator:
 
         # 应用学术风格
         plt.rcParams.update(ACADEMIC_STYLE)
+
+        # ⚠️ 关键：update()后必须重新设置中文字体，否则会被重置为默认值
+        plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei', 'DejaVu Sans']
+        plt.rcParams['axes.unicode_minus'] = False
 
     def _save_figure(self, fig, filename: str) -> str:
         """保存图表"""
@@ -434,7 +457,10 @@ class ChartGenerator:
         # GARCH特有图表
         if model_type in ['GARCH', 'ARCH'] and 'conditional_volatility' in data:
             cond_vol = data['conditional_volatility']
-            chart_paths['conditional_volatility'] = self.plot_conditional_volatility(cond_vol)
+            # 过滤None值（NaN被转换为None以支持JSON序列化）
+            clean_cond_vol = [v for v in cond_vol if v is not None]
+            if clean_cond_vol:
+                chart_paths['conditional_volatility'] = self.plot_conditional_volatility(clean_cond_vol)
 
         # VAR/VECM特有图表
         if model_type in ['VAR', 'VECM']:

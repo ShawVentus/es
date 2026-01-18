@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, Optional, Tuple, Literal
 from arch import arch_model
-from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA
+from statsmodels.tsa.stattools import arma_order_select_ic
+import warnings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class GARCHService:
 
     def _select_arma_order(self, series: pd.Series) -> Tuple[int, int]:
         """
-        自动选择均值方程的ARMA阶数
+        自动选择均值方程的ARMA阶数（使用statsmodels）
 
         Args:
             series: 时间序列
@@ -34,32 +34,24 @@ class GARCHService:
             (p, q) 最优阶数
         """
         try:
-            # 使用AutoARIMA选择最优阶数，d=0强制平稳
-            df = pd.DataFrame({
-                'unique_id': 'series1',
-                'ds': pd.date_range('2000-01-01', periods=len(series), freq='D'),
-                'y': series.values
-            })
-
-            model = AutoARIMA(
-                season_length=1,
-                max_p=self.max_p_mean,
-                max_q=self.max_q_mean,
-                d=0,  # 强制d=0
-                max_d=0
-            )
-
-            sf = StatsForecast(models=[model], freq='D', n_jobs=1)
-            sf.fit(df)
-
-            fitted_model = sf.fitted_[0, 0].model_
-            order = fitted_model.get('order', (1, 0, 1))
-
-            return (order[0], order[2])  # 返回(p, q)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                
+                # 使用statsmodels的AIC准则选择阶数
+                result = arma_order_select_ic(
+                    series.values,
+                    max_ar=self.max_p_mean,
+                    max_ma=self.max_q_mean,
+                    ic='aic',
+                    trend='c'
+                )
+                
+                return (int(result.aic_min_order[0]), int(result.aic_min_order[1]))
 
         except Exception as e:
             logger.warning(f"自动选择ARMA阶数失败: {e}，使用默认(1,1)")
             return (1, 1)
+
 
     def _optimize_garch_order(
         self,
@@ -203,21 +195,24 @@ class GARCHService:
             aic_corrected = 2 * n_params - 2 * log_lik_corrected
             bic_corrected = n_params * np.log(n) - 2 * log_lik_corrected
 
-            # 还原残差和条件波动率
-            residuals = (res.resid / scale).tolist()
-            cond_vol = (res.conditional_volatility / scale).tolist()
-            std_resid = res.std_resid.tolist() if hasattr(res, 'std_resid') else None
+            # 还原残差和条件波动率（将NaN转为None以符合JSON标准）
+            residuals = (res.resid / scale).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
+            cond_vol = (res.conditional_volatility / scale).replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
+            std_resid = res.std_resid.replace({np.nan: None, np.inf: None, -np.inf: None}).tolist() if hasattr(res, 'std_resid') else None
 
             # 拟合值 = 原始值 - 残差
-            fitted = (series_clean - (res.resid / scale)).tolist()
+            fitted_series = series_clean - (res.resid / scale)
 
-            # R²计算
+            # R²计算（在转换为list之前，使用numpy数组）
             y_true = series_clean.values
-            y_fitted = np.array(fitted)
+            y_fitted = fitted_series.values
             mask = ~np.isnan(y_true) & ~np.isnan(y_fitted)
             sst = ((y_true[mask] - y_true[mask].mean())**2).sum()
             sse = ((y_true[mask] - y_fitted[mask])**2).sum()
             r2 = 1 - (sse/sst) if sst > 0 else 0
+
+            # 转换为list时将NaN替换为None（JSON安全）
+            fitted = fitted_series.replace({np.nan: None, np.inf: None, -np.inf: None}).tolist()
 
             # 分布参数
             dist_params = {}
@@ -246,14 +241,14 @@ class GARCHService:
                 "distribution": distribution,
                 "distribution_params": dist_params,
                 "parameters": {
-                    "all_params": res.params.to_dict(),
-                    "p_values": res.pvalues.to_dict()
+                    "all_params": res.params.replace({np.nan: None, np.inf: None, -np.inf: None}).to_dict(),
+                    "p_values": res.pvalues.replace({np.nan: None, np.inf: None, -np.inf: None}).to_dict()
                 },
                 "metrics": {
-                    "r2": float(r2),
-                    "log_likelihood": float(log_lik_corrected),
-                    "aic": float(aic_corrected),
-                    "bic": float(bic_corrected),
+                    "r2": float(r2) if not np.isnan(r2) else None,
+                    "log_likelihood": float(log_lik_corrected) if not np.isnan(log_lik_corrected) else None,
+                    "aic": float(aic_corrected) if not np.isnan(aic_corrected) else None,
+                    "bic": float(bic_corrected) if not np.isnan(bic_corrected) else None,
                     "n_observations": n
                 },
                 "data": {

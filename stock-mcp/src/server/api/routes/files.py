@@ -18,10 +18,12 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Body
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from src.server.core.dataset_manager import get_dataset_manager
+from src.server.core.purchase_manager import get_purchase_manager
 from src.server.utils.request_context import get_current_user_id
 
 # 配置日志
@@ -33,6 +35,21 @@ router = APIRouter(prefix="/api/v1/files", tags=["Files"])
 # 调试模式
 DEBUG_MODE = os.getenv("FILES_API_DEBUG", "false").lower() == "true"
 
+
+# ============ Pydantic Models ============
+
+class MarkPurchasedRequest(BaseModel):
+    """标记购买请求体"""
+    filenames: List[str]
+
+
+class CheckPurchasedResponse(BaseModel):
+    """购买状态检查响应"""
+    filename: str
+    is_purchased: bool
+
+
+# ============ Helper Functions ============
 
 def _debug_log(message: str, **kwargs):
     """调试日志"""
@@ -205,11 +222,23 @@ async def download_dataset(filename: str, request: Request) -> FileResponse:
     下载数据集文件
 
     返回 CSV 文件流
+
+    注意: 需要先通过购买检查，未购买的文件将被拒绝下载
     """
     user_id = _require_user_id(request)
     _debug_log("Download dataset request", user_id=user_id, filename=filename)
 
     try:
+        # 检查购买状态（模拟数据除外）
+        if filename != "NVDA_Half_Year_Prices_202507_202601.csv":
+            purchase_mgr = get_purchase_manager()
+            if not purchase_mgr.is_purchased(user_id, filename):
+                logger.warning(f"User {user_id} attempted to download unpurchased file: {filename}")
+                raise HTTPException(
+                    status_code=403,
+                    detail="此文件未购买，请先完成购买"
+                )
+
         manager = get_dataset_manager()
 
         # 清理文件名并构建路径
@@ -252,4 +281,134 @@ async def download_dataset(filename: str, request: Request) -> FileResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to download: {str(e)}"
+        )
+
+
+@router.post("/mark-purchased")
+async def mark_purchased(request: Request, body: MarkPurchasedRequest) -> Dict[str, Any]:
+    """
+    标记文件为已购买（前端扣费成功后调用）
+
+    请求体:
+    {
+        "filenames": ["file1.csv", "file2.csv"]
+    }
+
+    返回:
+    {
+        "success": true,
+        "message": "已标记 2 个文件为已购买",
+        "marked_count": 2
+    }
+    """
+    user_id = _require_user_id(request)
+    filenames = body.filenames
+
+    _debug_log("Mark purchased request", user_id=user_id, count=len(filenames))
+
+    if not filenames:
+        raise HTTPException(status_code=400, detail="文件名列表不能为空")
+
+    try:
+        purchase_mgr = get_purchase_manager()
+        success = purchase_mgr.batch_mark_purchased(user_id, filenames)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="标记购买状态失败")
+
+        logger.info(f"Marked {len(filenames)} files as purchased for user {user_id}")
+
+        return {
+            "success": True,
+            "message": f"已标记 {len(filenames)} 个文件为已购买",
+            "marked_count": len(filenames)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to mark purchased: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"标记购买失败: {str(e)}"
+        )
+
+
+@router.get("/check-purchased/{filename}")
+async def check_purchased(filename: str, request: Request) -> CheckPurchasedResponse:
+    """
+    检查文件是否已购买
+
+    返回:
+    {
+        "filename": "file1.csv",
+        "is_purchased": true
+    }
+    """
+    user_id = _require_user_id(request)
+    _debug_log("Check purchased request", user_id=user_id, filename=filename)
+
+    try:
+        # 模拟数据永远视为已购买
+        if filename == "NVDA_Half_Year_Prices_202507_202601.csv":
+            return CheckPurchasedResponse(filename=filename, is_purchased=True)
+
+        purchase_mgr = get_purchase_manager()
+        is_purchased = purchase_mgr.is_purchased(user_id, filename)
+
+        return CheckPurchasedResponse(filename=filename, is_purchased=is_purchased)
+
+    except Exception as e:
+        logger.error(f"Failed to check purchased: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"检查购买状态失败: {str(e)}"
+        )
+
+
+@router.post("/unmark-purchased")
+async def unmark_purchased(request: Request, body: MarkPurchasedRequest) -> Dict[str, Any]:
+    """
+    撤销购买标记（用于下载失败时回滚）
+
+    请求体:
+    {
+        "filenames": ["file1.csv", "file2.csv"]
+    }
+
+    返回:
+    {
+        "success": true,
+        "message": "已撤销 2 个文件的购买标记"
+    }
+    """
+    user_id = _require_user_id(request)
+    filenames = body.filenames
+
+    _debug_log("Unmark purchased request", user_id=user_id, count=len(filenames))
+
+    if not filenames:
+        raise HTTPException(status_code=400, detail="文件名列表不能为空")
+
+    try:
+        purchase_mgr = get_purchase_manager()
+        success = purchase_mgr.unmark_purchased(user_id, filenames)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="撤销购买标记失败")
+
+        logger.info(f"Unmarked {len(filenames)} files for user {user_id}")
+
+        return {
+            "success": True,
+            "message": f"已撤销 {len(filenames)} 个文件的购买标记"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to unmark purchased: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"撤销购买标记失败: {str(e)}"
         )

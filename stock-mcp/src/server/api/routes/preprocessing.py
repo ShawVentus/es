@@ -167,7 +167,7 @@ async def get_statistics(filename: str, value_col: str = "close_price"):
     获取数据的描述性统计
 
     Args:
-        filename: 文件名（在processed目录中）
+        filename: 文件名（在dataset目录中）
         value_col: 数据列名
 
     Returns:
@@ -175,7 +175,11 @@ async def get_statistics(filename: str, value_col: str = "close_price"):
     """
     try:
         user_id = get_current_user_id() or "anonymous"
-        file_path = f"/root/librechat_user_data/{user_id}/processed/{filename}"
+
+        # 优先从dataset目录读取（原始数据），若不存在则从processed读取（预处理后数据）
+        file_path = f"/root/librechat_user_data/{user_id}/dataset/{filename}"
+        if not os.path.exists(file_path):
+            file_path = f"/root/librechat_user_data/{user_id}/processed/{filename}"
 
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")

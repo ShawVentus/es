@@ -11,12 +11,15 @@
 使用示例：
     # 设置用户ID（在中间件中）
     set_current_user_id("937585404@qq.com")
-    
+
     # 获取用户ID（在MCP工具中）
     user_id = get_current_user_id()
-    
+
     # 解析为邮箱（如果是ObjectId会自动转换）
     email = resolve_user_id_to_email()
+
+    # 从FastMCP的http_request获取用户ID（推荐用于MCP工具）
+    user_id = get_user_id_from_mcp_request()
 """
 
 from contextvars import ContextVar
@@ -80,4 +83,41 @@ def clear_current_user_id() -> None:
     通常在请求结束时调用
     """
     _current_user_id.set(None)
+
+
+def get_user_id_from_mcp_request() -> Optional[str]:
+    """
+    从 FastMCP 的 HTTP Request 中获取用户ID
+
+    说明：
+    - 使用 FastMCP 官方 API: fastmcp.server.dependencies.get_http_request()
+    - 该 API 会自动处理两种情况：
+      1. 从 MCP SDK 的 request_ctx 获取（工具执行阶段）
+      2. Fallback 到 FastMCP 的 _current_http_request（中间件阶段）
+    - 相比 get_current_user_id()，这个方法更可靠（直接从 Request 对象读取）
+
+    Returns:
+        用户ID字符串（从 X-User-Id header 提取），如果未找到则返回 None
+
+    使用场景：
+        推荐在所有 MCP 工具中使用此方法替代 get_current_user_id()
+
+    参考文档：
+        https://gofastmcp.com/servers/context#http-requests
+    """
+    try:
+        # 使用 FastMCP 官方 API 获取当前 HTTP Request
+        from fastmcp.server.dependencies import get_http_request
+
+        request = get_http_request()
+
+        # 从 Request headers 提取 X-User-Id
+        user_id = request.headers.get('X-User-Id')
+        return user_id
+    except RuntimeError:
+        # get_http_request() 会在没有活动请求时抛出 RuntimeError
+        return None
+    except Exception:
+        # 捕获其他异常，避免工具崩溃
+        return None
 

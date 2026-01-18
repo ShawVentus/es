@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { listReports, deleteReport, type ReportMeta, getReportDownloadUrl } from '../../api/reports';
+import { listReports, getReportDetails, type ReportMeta, getReportDownloadUrl, getCurrentUserId } from '../../api/reports';
 import { renderAsync } from 'docx-preview';
 
 interface ModelReport {
@@ -23,13 +23,16 @@ interface ModelReport {
     bic: number;
     logLikelihood: number;
     rsquared?: number;
+    n_observations?: number;
   };
+  modelResult?: any; // 完整模型结果
 }
 
 export default function ReportAnalysis() {
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
   const colors = getThemeColors(theme);
   const reportContentRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const [selectedReport, setSelectedReport] = useState<string>('1');
   const [activeTab, setActiveTab] = useState<'summary' | 'parameters' | 'diagnostics'>('summary');
@@ -67,6 +70,17 @@ export default function ReportAnalysis() {
           }));
           setRealReports(convertedReports);
           setShowMockWarning(false); // Hide warning if we have real data
+
+          // 自动选择最新报告（如果有 latestReportId）
+          const latestReportId = localStorage.getItem('latestReportId');
+          if (latestReportId) {
+            const targetReport = convertedReports.find(r => r.id === latestReportId);
+            if (targetReport) {
+              setSelectedReport(latestReportId);
+            }
+            // 无论是否找到都清理，避免重复尝试
+            localStorage.removeItem('latestReportId');
+          }
         }
       } catch (error) {
         console.error('Failed to fetch reports:', error);
@@ -77,6 +91,92 @@ export default function ReportAnalysis() {
 
     fetchReports();
   }, []);
+
+  // Save scroll position when unmounting or changing tabs/reports
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    console.log('🔍 [保存监听] container:', container);
+    if (!container) {
+      console.error('❌ scrollContainerRef 为 null！');
+      return;
+    }
+
+    const handleScroll = () => {
+      const scrollPosition = container.scrollTop;
+      console.log('💾 [保存] scrollTop:', scrollPosition);
+      sessionStorage.setItem('reportScrollPosition', scrollPosition.toString());
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    console.log('✅ scroll监听器已绑定');
+    return () => {
+      console.log('🗑️ scroll监听器已移除');
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Restore scroll position when component mounts or tab changes
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    console.log('🔄 [恢复触发] activeTab:', activeTab, 'selectedReport:', selectedReport);
+    console.log('🔄 [恢复触发] container:', container);
+
+    if (!container) {
+      console.error('❌ [恢复] container 为 null！');
+      return;
+    }
+
+    // Only restore on summary tab (where the report content is)
+    if (activeTab === 'summary') {
+      const savedPosition = sessionStorage.getItem('reportScrollPosition');
+      console.log('💾 [恢复] sessionStorage值:', savedPosition);
+      console.log('📏 [恢复] scrollHeight:', container.scrollHeight, 'clientHeight:', container.clientHeight);
+
+      if (savedPosition) {
+        // Use setTimeout to ensure DOM is fully rendered
+        setTimeout(() => {
+          console.log('⏰ [setTimeout] scrollHeight:', container.scrollHeight);
+          console.log('⏰ [setTimeout] 尝试设置scrollTop为:', savedPosition);
+          container.scrollTop = parseInt(savedPosition, 10);
+          console.log('⏰ [setTimeout] 实际scrollTop:', container.scrollTop);
+        }, 0);
+      }
+    }
+  }, [activeTab, selectedReport]);
+
+  // Fetch report details when a real report is selected
+  useEffect(() => {
+    const fetchReportDetails = async () => {
+      if (!selectedReport || !realReports.find(r => r.id === selectedReport)) {
+        return; // Only fetch for real reports
+      }
+
+      try {
+        const details = await getReportDetails(selectedReport);
+        if (details.success && details.model_result) {
+          // Update realReports with detailed metrics
+          setRealReports(prev => prev.map(r => {
+            if (r.id === selectedReport) {
+              return {
+                ...r,
+                metrics: {
+                  ...r.metrics,
+                  logLikelihood: details.model_result.metrics?.log_likelihood || 0,
+                  n_observations: details.model_result.metrics?.n_observations || 0
+                },
+                modelResult: details.model_result
+              };
+            }
+            return r;
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch report details:', error);
+      }
+    };
+
+    fetchReportDetails();
+  }, [selectedReport, realReports.length]);
 
   const mockReports: ModelReport[] = [
     {
@@ -206,9 +306,16 @@ export default function ReportAnalysis() {
 
   // Load DOCX preview when a real report is selected
   useEffect(() => {
+    let isCancelled = false;
+
     const loadDocxPreview = async () => {
       if (!currentReport || !realReports.find(r => r.id === currentReport.id)) {
         return; // Only load DOCX for real reports
+      }
+
+      // Only load DOCX when on summary tab
+      if (activeTab !== 'summary') {
+        return;
       }
 
       if (!docxContainerRef.current) return;
@@ -216,26 +323,67 @@ export default function ReportAnalysis() {
       setLoadingDocx(true);
       try {
         const url = getReportDownloadUrl(currentReport.id);
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          headers: {
+            'X-User-Id': getCurrentUserId()
+          }
+        });
+
+        if (isCancelled) return;
+
+        if (!response.ok) {
+          const errorMsg = response.status === 404
+            ? '报告文件不存在'
+            : `加载失败 (${response.status})`;
+          throw new Error(errorMsg);
+        }
+
         const blob = await response.blob();
 
-        // Clear previous content
-        docxContainerRef.current.innerHTML = '';
+        if (isCancelled || !docxContainerRef.current) return;
 
-        // Render DOCX
+        // 使用try-catch包裹innerHTML清空操作，防止docx-preview残留节点导致错误
+        try {
+          docxContainerRef.current.innerHTML = '';
+        } catch (e) {
+          // 如果清空失败，尝试逐个移除子节点
+          while (docxContainerRef.current.firstChild) {
+            docxContainerRef.current.removeChild(docxContainerRef.current.firstChild);
+          }
+        }
+
         await renderAsync(blob, docxContainerRef.current);
       } catch (error) {
+        if (isCancelled) return;
+
         console.error('Failed to load DOCX:', error);
+        const errorMessage = error instanceof Error ? error.message : '加载报告失败';
         if (docxContainerRef.current) {
-          docxContainerRef.current.innerHTML = '<div class="text-red-500 p-4">加载报告失败</div>';
+          docxContainerRef.current.innerHTML = `<div class="text-red-500 p-4">${errorMessage}</div>`;
         }
       } finally {
-        setLoadingDocx(false);
+        if (!isCancelled) {
+          setLoadingDocx(false);
+        }
       }
     };
 
     loadDocxPreview();
-  }, [selectedReport, currentReport, realReports]);
+
+    return () => {
+      isCancelled = true;
+      // 清理时安全地移除所有docx-preview创建的子节点
+      if (docxContainerRef.current) {
+        try {
+          while (docxContainerRef.current.firstChild) {
+            docxContainerRef.current.removeChild(docxContainerRef.current.firstChild);
+          }
+        } catch (e) {
+          // 静默失败，避免报错
+        }
+      }
+    };
+  }, [selectedReport, currentReport, realReports, activeTab]);
 
   const getHighlightStyle = () => {
     if (theme === 'light') {
@@ -509,7 +657,7 @@ export default function ReportAnalysis() {
               </div>
 
               {/* Report Content */}
-              <div className="flex-1 overflow-y-auto p-6">
+              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6">
                 <div className="max-w-5xl mx-auto">
                   {activeTab === 'summary' && (
                     <div className="space-y-4">
@@ -545,7 +693,9 @@ export default function ReportAnalysis() {
                           </div>
                           <div className={`p-3 rounded-lg ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} border-2 ${colors.borderColor}`}>
                             <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>样本量</p>
-                            <p className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>1,200 观测值</p>
+                            <p className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                              {currentReport.metrics.n_observations || 0} 观测值
+                            </p>
                           </div>
                           <div className={`p-3 rounded-lg ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} border-2 ${colors.borderColor}`}>
                             <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>估计方法</p>
@@ -588,12 +738,13 @@ export default function ReportAnalysis() {
                           />
                         ) : realReports.find(r => r.id === selectedReport) ? (
                           // DOCX Preview for real reports
-                          <div ref={docxContainerRef} className={`docx-preview-container ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} p-6`}>
+                          <div key={selectedReport} className={`docx-preview-wrapper ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} p-6`}>
                             {loadingDocx && (
                               <div className="flex items-center justify-center h-64">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
                               </div>
                             )}
+                            <div ref={docxContainerRef} className="docx-preview-container"></div>
                           </div>
                         ) : (
                           // Markdown Preview for mock reports
@@ -653,74 +804,85 @@ export default function ReportAnalysis() {
                               <tr>
                                 <th className={`px-6 py-2 text-left text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>参数</th>
                                 <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>估计值</th>
-                                <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>标准误</th>
-                                <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>t统计量</th>
-                                <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>p值</th>
-                                <th className={`px-6 py-2 text-center text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>显著性</th>
+                                {currentReport.modelResult?.parameters?.p_values &&
+                                 Object.values(currentReport.modelResult.parameters.p_values).some(p => p !== null) && (
+                                  <>
+                                    <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>p值</th>
+                                    <th className={`px-6 py-2 text-center text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>显著性</th>
+                                  </>
+                                )}
                               </tr>
                             </thead>
                             <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-800' : 'divide-gray-200'}`}>
-                              <tr className={theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                                <td className={`px-6 py-3 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} whitespace-nowrap`}>μ (均值)</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.0003</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} text-right whitespace-nowrap`}>0.0001</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>2.456</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.014</td>
-                                <td className="px-6 py-3 text-center">
-                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">**</span>
-                                </td>
-                              </tr>
-                              <tr className={theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                                <td className={`px-6 py-3 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} whitespace-nowrap`}>ω (常数项)</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.0000</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} text-right whitespace-nowrap`}>0.0000</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>3.892</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.000</td>
-                                <td className="px-6 py-3 text-center">
-                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">***</span>
-                                </td>
-                              </tr>
-                              <tr className={theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                                <td className={`px-6 py-3 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} whitespace-nowrap`}>α (ARCH项)</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.0856</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} text-right whitespace-nowrap`}>0.0123</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>6.959</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.000</td>
-                                <td className="px-6 py-3 text-center">
-                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">***</span>
-                                </td>
-                              </tr>
-                              <tr className={theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                                <td className={`px-6 py-3 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} whitespace-nowrap`}>β (GARCH项)</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.9012</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} text-right whitespace-nowrap`}>0.0145</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>62.152</td>
-                                <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>0.000</td>
-                                <td className="px-6 py-3 text-center">
-                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">***</span>
-                                </td>
-                              </tr>
+                              {currentReport.modelResult?.parameters ? (
+                                // 真实数据：从modelResult.parameters提取
+                                (() => {
+                                  const params = currentReport.modelResult.parameters;
+                                  const allParams = params.all_params || params.coefficients || {};
+                                  const pValues = params.p_values || {};
+                                  const hasPValues = Object.values(pValues).some(p => p !== null);
+
+                                  // 如果没有参数，显示提示
+                                  if (Object.keys(allParams).length === 0) {
+                                    return (
+                                      <tr>
+                                        <td colSpan={4} className={`px-6 py-8 text-center text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                                          暂无参数数据
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+
+                                  return Object.entries(allParams).map(([paramName, value]: [string, any]) => {
+                                    const pValue = pValues[paramName];
+                                    const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
+                                    const numPValue = typeof pValue === 'number' ? pValue : null;
+
+                                    // 显著性标记
+                                    let significance = '';
+                                    if (numPValue !== null) {
+                                      if (numPValue < 0.01) significance = '***';
+                                      else if (numPValue < 0.05) significance = '**';
+                                      else if (numPValue < 0.1) significance = '*';
+                                    }
+
+                                    return (
+                                      <tr key={paramName} className={theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
+                                        <td className={`px-6 py-3 text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} whitespace-nowrap`}>{paramName}</td>
+                                        <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>{numValue.toFixed(6)}</td>
+                                        {hasPValues && (
+                                          <>
+                                            <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'} text-right whitespace-nowrap`}>
+                                              {numPValue !== null ? numPValue.toFixed(4) : '-'}
+                                            </td>
+                                            <td className="px-6 py-3 text-center">
+                                              {significance && (
+                                                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">{significance}</span>
+                                              )}
+                                            </td>
+                                          </>
+                                        )}
+                                      </tr>
+                                    );
+                                  });
+                                })()
+                              ) : (
+                                // 降级：显示暂无数据
+                                <tr>
+                                  <td colSpan={4} className={`px-6 py-8 text-center text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    暂无参数数据
+                                  </td>
+                                </tr>
+                              )}
                             </tbody>
                           </table>
                         </div>
                         <div className={`px-6 py-3 ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} border-t-2 ${colors.borderColor}`}>
                           <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                            注：*** p&lt;0.01, ** p&lt;0.05, * p&lt;0.1
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className={`${theme === 'dark' ? 'bg-gray-900' : `bg-gradient-to-br ${colors.gradient}`} rounded-xl border-2 ${colors.borderColor} p-5`}>
-                        <h3 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-3`}>参数解释</h3>
-                        <div className={`space-y-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                          <p>
-                            <strong>ARCH项系数 (α = 0.0856)：</strong>表示前期冲击对当期波动率的影响程度。该值显著为正，说明市场存在波动率聚集效应。
-                          </p>
-                          <p>
-                            <strong>GARCH项系数 (β = 0.9012)：</strong>反映波动率的持续性。该值接近1且高度显著，表明波动率具有很强的持续性。
-                          </p>
-                          <p>
-                            <strong>持续性指标 (α + β = 0.9868)：</strong>接近但小于1，满足平稳性条件，说明波动率冲击会逐渐衰减。
+                            {currentReport.modelResult?.parameters?.p_values &&
+                             Object.values(currentReport.modelResult.parameters.p_values).some(p => p !== null)
+                              ? '注：*** p<0.01, ** p<0.05, * p<0.1'
+                              : currentReport.modelResult?.note || '注：当前模型库不提供参数p值'}
                           </p>
                         </div>
                       </div>
@@ -731,79 +893,139 @@ export default function ReportAnalysis() {
                     <div className="space-y-4">
                       <div className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} rounded-xl border-2 ${colors.borderColor} p-5`}>
                         <h3 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-4`}>残差诊断检验</h3>
-                        <div className="space-y-3">
-                          <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Ljung-Box Q检验（标准化残差）</h4>
-                              <span className="text-xs font-medium text-green-600 bg-green-50 px-2.5 py-1 rounded whitespace-nowrap">通过</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Q统计量</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>12.456</p>
+                        {currentReport.modelResult ? (
+                          <div className="space-y-3">
+                            {/* 显示检验错误信息（如果有） */}
+                            {currentReport.modelResult.residual_tests?.error && (
+                              <div className={`p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg`}>
+                                <div className="flex items-center gap-2">
+                                  <i className="ri-error-warning-line text-yellow-600 text-lg"></i>
+                                  <p className="text-sm text-yellow-800">{currentReport.modelResult.residual_tests.error}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>0.342</p>
-                              </div>
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>滞后阶数</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>20</p>
-                              </div>
-                            </div>
-                            <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
-                              结论：标准化残差不存在显著的自相关性，模型充分捕捉了序列的线性相关结构。
-                            </p>
-                          </div>
+                            )}
 
-                          <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>ARCH-LM检验</h4>
-                              <span className="text-xs font-medium text-green-600 bg-green-50 px-2.5 py-1 rounded whitespace-nowrap">通过</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>LM统计量</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>8.234</p>
+                            {/* ADF检验 */}
+                            {currentReport.modelResult.residual_tests?.adf && !currentReport.modelResult.residual_tests.adf.error && (
+                              <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>ADF单位根检验（残差）</h4>
+                                  <span className={`text-xs font-medium ${currentReport.modelResult.residual_tests.adf.is_stationary ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-2.5 py-1 rounded whitespace-nowrap`}>
+                                    {currentReport.modelResult.residual_tests.adf.is_stationary ? '通过' : '未通过'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>ADF统计量</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.adf.test_statistic?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.adf.p_value?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>滞后阶数</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.adf.used_lag || '-'}</p>
+                                  </div>
+                                </div>
+                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
+                                  结论：{currentReport.modelResult.residual_tests.adf.conclusion || '残差平稳性检验'}
+                                </p>
                               </div>
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>0.567</p>
-                              </div>
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>滞后阶数</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>10</p>
-                              </div>
-                            </div>
-                            <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
-                              结论：标准化残差平方不存在显著的ARCH效应，模型有效刻画了条件异方差特征。
-                            </p>
-                          </div>
+                            )}
 
-                          <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Jarque-Bera正态性检验</h4>
-                              <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded whitespace-nowrap">警告</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>JB统计量</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>156.789</p>
+                            {/* JB检验 */}
+                            {currentReport.modelResult.residual_tests?.jb && !currentReport.modelResult.residual_tests.jb.error && (
+                              <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Jarque-Bera正态性检验</h4>
+                                  <span className={`text-xs font-medium ${currentReport.modelResult.residual_tests.jb.is_normal ? 'text-green-600 bg-green-50' : 'text-yellow-600 bg-yellow-50'} px-2.5 py-1 rounded whitespace-nowrap`}>
+                                    {currentReport.modelResult.residual_tests.jb.is_normal ? '通过' : '警告'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>JB统计量</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.jb.test_statistic?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.jb.p_value?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>样本量</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.jb.n_observations || '-'}</p>
+                                  </div>
+                                </div>
+                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
+                                  结论：{currentReport.modelResult.residual_tests.jb.conclusion || '正态性检验'}
+                                </p>
                               </div>
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>0.000</p>
+                            )}
+
+                            {/* Ljung-Box检验 */}
+                            {currentReport.modelResult.residual_tests?.ljung_box && !currentReport.modelResult.residual_tests.ljung_box.error && (
+                              <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Ljung-Box Q检验（自相关）</h4>
+                                  <span className={`text-xs font-medium ${!currentReport.modelResult.residual_tests.ljung_box.has_autocorrelation ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-2.5 py-1 rounded whitespace-nowrap`}>
+                                    {!currentReport.modelResult.residual_tests.ljung_box.has_autocorrelation ? '通过' : '未通过'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Q统计量</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.ljung_box.test_statistic?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.ljung_box.p_value?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>滞后阶数</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.ljung_box.selected_lag || '-'}</p>
+                                  </div>
+                                </div>
+                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
+                                  结论：{currentReport.modelResult.residual_tests.ljung_box.conclusion || '自相关检验'}
+                                </p>
                               </div>
-                              <div>
-                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>偏度</p>
-                                <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>-0.234</p>
+                            )}
+
+                            {/* ARCH LM检验 */}
+                            {currentReport.modelResult.residual_tests?.arch_lm && !currentReport.modelResult.residual_tests.arch_lm.error && (
+                              <div className={`p-4 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : `bg-${colors.primaryLight}`} rounded-lg border-2 ${colors.borderColor}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>ARCH-LM检验</h4>
+                                  <span className={`text-xs font-medium ${!currentReport.modelResult.residual_tests.arch_lm.has_arch_effect ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-2.5 py-1 rounded whitespace-nowrap`}>
+                                    {!currentReport.modelResult.residual_tests.arch_lm.has_arch_effect ? '通过' : '未通过'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>LM统计量</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.arch_lm.lm_statistic?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>p值</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.arch_lm.lm_p_value?.toFixed(4) || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} mb-1`}>滞后阶数</p>
+                                    <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{currentReport.modelResult.residual_tests.arch_lm.selected_lag || '-'}</p>
+                                  </div>
+                                </div>
+                                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
+                                  结论：{currentReport.modelResult.residual_tests.arch_lm.conclusion || 'ARCH效应检验'}
+                                </p>
                               </div>
-                            </div>
-                            <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-3`}>
-                              结论：残差序列拒绝正态性假设，存在尖峰厚尾特征。建议考虑使用t分布或GED分布。
-                            </p>
+                            )}
                           </div>
-                        </div>
+                        ) : (
+                          <div className={`text-center py-8 text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                            暂无诊断检验数据
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

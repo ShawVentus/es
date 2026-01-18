@@ -18,7 +18,7 @@ class ReportRequest(BaseModel):
     preprocessing_record: Dict[str, Any]
     test_results: Dict[str, Any]
     descriptive_stats: Dict[str, Any]  # ✅ 支持单变量Dict[str, float]和多变量Dict[str, Dict[str, float]]
-    data_source_info: Dict[str, str]
+    data_source_info: Dict[str, Any]  # ✅ 修改：允许数字类型（original_count），与其他字段保持一致
     model_type: str
 
 @router.post("/generate")
@@ -136,6 +136,41 @@ async def delete_report(report_id: str):
 
     except Exception as e:
         logger.error(f"删除报告失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{report_id}/details")
+async def get_report_details(report_id: str):
+    """获取报告详细信息（包含完整模型结果）"""
+    try:
+        user_id = get_current_user_id() or "anonymous"
+        report_dir = f"/root/librechat_user_data/{user_id}/reports/{report_id}"
+
+        # 读取meta.json
+        meta_path = os.path.join(report_dir, "meta.json")
+        if not os.path.exists(meta_path):
+            raise HTTPException(status_code=404, detail="报告不存在")
+
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+
+        # 读取model_result.json
+        model_result_path = os.path.join(report_dir, "model_result.json")
+        model_result = None
+        if os.path.exists(model_result_path):
+            with open(model_result_path, 'r', encoding='utf-8') as f:
+                model_result = json.load(f)
+
+        return {
+            "success": True,
+            "report_id": report_id,
+            "meta": meta,
+            "model_result": model_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取报告详情失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/download/{report_id}/report.docx")

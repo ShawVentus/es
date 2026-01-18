@@ -30,8 +30,18 @@ export default defineConfig({
   
   // 开发服务器配置
   server: {
+    host: '0.0.0.0',
+    allowedHosts: ['*'],
     port: 3001,  // 使用 3001 避免与 frontend (V1) 的 3000 端口冲突
     open: true,
+    // API 代理配置：将 /api 请求转发到后端服务
+    proxy: {
+      '/api': {
+        target: 'http://localhost:9898',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   
   // 构建配置

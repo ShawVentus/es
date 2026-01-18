@@ -7,7 +7,7 @@
  * 创建日期: 2026-01-13
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
 import { toast } from 'react-hot-toast';
 import JSZip from 'jszip';
@@ -23,6 +23,7 @@ import {
 } from '../store/filesStore';
 import { useLibreChatAuth } from '../components/Auth/LibreChatAuth';
 import * as api from '../api/dataset';
+import * as billing from '../api/billing';
 import type { DatasetMeta } from '../api/dataset';
 
 /**
@@ -30,6 +31,7 @@ import type { DatasetMeta } from '../api/dataset';
  * 当 API 返回空数据或调用失败时使用
  */
 const MOCK_DATASET: DatasetMeta = {
+    id: 'mock-nvda-dataset',
     filename: 'NVDA_Half_Year_Prices_202507_202601.csv',
     name: 'NVDA半年价格数据（模拟）',
     category: '股票数据',
@@ -38,7 +40,16 @@ const MOCK_DATASET: DatasetMeta = {
     size: 17584,
     size_formatted: '17.2 KB',
     created_at: '2026-01-15T21:32:09.235695',
-    columns: ['ticker', 'price', 'currency', 'timestamp', 'volume', 'open_price', 'high_price', 'low_price', 'close_price', 'source']
+    columns: ['ticker', 'price', 'currency', 'timestamp', 'volume', 'open_price', 'high_price', 'low_price', 'close_price', 'source'],
+    stats: {
+        Min: 100.5,
+        Max: 550.2,
+        Mean: 325.3,
+        Median: 320.1,
+        'Std.Dev': 85.4,
+        Skewness: 0.15,
+        Kurtosis: -0.5
+    }
 };
 
 /**
@@ -71,6 +82,9 @@ export function useDatasets(): UseDatasets {
     const setLastFetchTime = useSetRecoilState(lastFetchTimeState);
     const shouldRefresh = useRecoilValue(shouldRefreshSelector);
     const setSelectedDataForModel = useSetRecoilState(selectedDataForModelState);
+
+    // 并发控制：记录正在下载的文件
+    const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
 
     /**
      * 获取数据集列表
@@ -120,7 +134,7 @@ export function useDatasets(): UseDatasets {
             if (!data || data.length === 0) {
                 console.warn('[useDatasets] API 返回空数据，加载模拟数据...');
                 setDatasets([MOCK_DATASET]);
-                toast.info('当前无数据，已加载模拟数据供测试使用');
+                toast('当前无数据，已加载模拟数据供测试使用', { icon: 'ℹ️' });
             } else {
                 setDatasets(data);
                 console.log('[useDatasets] Fetched', data.length, 'datasets');
@@ -178,64 +192,176 @@ export function useDatasets(): UseDatasets {
     }, [setDatasets]);
 
     /**
-     * 下载单个数据集
+     * 下载单个数据集（带扣费检查 + 错误回滚 + 并发控制）
      */
     const downloadDataset = useCallback(async (filename: string) => {
+        // 并发控制：检查是否正在下载
+        if (downloadingFiles.has(filename)) {
+            toast.error('该文件正在下载中，请勿重复点击');
+            return;
+        }
+
+        // 标记为下载中
+        setDownloadingFiles(prev => new Set(prev).add(filename));
+
+        let hasCharged = false;
+        let hasMarked = false;
+
         try {
+            // 1. 检查是否已购买
+            const isPurchased = await billing.checkPurchased(filename);
+
+            if (isPurchased) {
+                // 已购买，直接下载
+                const blob = await api.downloadDataset(filename);
+                saveAs(blob, filename.endsWith('.csv') ? filename : `${filename}.csv`);
+                toast.success('下载成功');
+                return;
+            }
+
+            // 2. 未购买，先扣费
+            toast.loading('正在扣费...');
+            const chargeResult = await billing.chargeForDownload(1);
+
+            if (!chargeResult.success) {
+                toast.dismiss();
+                toast.error(`扣费失败: ${chargeResult.message}`);
+                return;
+            }
+
+            hasCharged = true;
+
+            // 3. 扣费成功，标记已购买
+            toast.dismiss();
+            toast.loading('正在标记购买...');
+            await billing.markAsPurchased([filename]);
+            hasMarked = true;
+
+            // 4. 下载文件
+            toast.dismiss();
+            toast.loading('正在下载...');
             const blob = await api.downloadDataset(filename);
             saveAs(blob, filename.endsWith('.csv') ? filename : `${filename}.csv`);
-            toast.success('下载成功');
+
+            toast.dismiss();
+            toast.success('下载成功（已扣除1积分）');
+
         } catch (err) {
-            const errorMsg = err instanceof Error ? err.message : '下载失败';
-            toast.error(errorMsg);
+            toast.dismiss();
+
+            // 错误回滚：如果已标记购买但下载失败，撤销购买标记
+            if (hasMarked) {
+                console.error('[Download] Download failed after marking purchased, rolling back...');
+                await billing.unmarkPurchased([filename]);
+
+                if (hasCharged) {
+                    toast.error('下载失败，已撤销购买标记。积分已扣除，请联系客服处理或稍后重试。');
+                } else {
+                    toast.error('下载失败，已撤销购买标记');
+                }
+            } else {
+                const errorMsg = err instanceof Error ? err.message : '下载失败';
+                toast.error(errorMsg);
+            }
+        } finally {
+            // 移除下载中标记
+            setDownloadingFiles(prev => {
+                const next = new Set(prev);
+                next.delete(filename);
+                return next;
+            });
         }
-    }, []);
+    }, [downloadingFiles]);
 
     /**
-     * 批量下载（带容错）
+     * 批量下载（带容错 + 批量扣费）
      */
     const batchDownload = useCallback(async (filenames: string[]): Promise<{ success: number; failed: string[] }> => {
-        const zip = new JSZip();
+        // 边界检查：空列表
+        if (filenames.length === 0) {
+            toast.error('请先选择要下载的文件');
+            return { success: 0, failed: [] };
+        }
+
         const failed: string[] = [];
-        let success = 0;
 
-        // 显示进度提示
-        const toastId = toast.loading(`正在打包 ${filenames.length} 个文件...`);
+        try {
+            // 1. 筛选出未购买的文件
+            const toastId1 = toast.loading('正在检查购买状态...');
+            const unpurchasedFiles = await billing.getUnpurchasedFiles(filenames);
+            toast.dismiss(toastId1);
 
-        for (const filename of filenames) {
-            try {
-                const blob = await api.downloadDataset(filename);
-                let zipFilename = filename.endsWith('.csv') ? filename : `${filename}.csv`;
+            // 2. 如果有未购买的文件，先批量扣费
+            if (unpurchasedFiles.length > 0) {
+                const totalCost = unpurchasedFiles.length;
+                const toastId2 = toast.loading(`需要扣除 ${totalCost} 积分，正在扣费...`);
 
-                // 防重名逻辑
-                if (zip.file(zipFilename)) {
-                    const baseName = zipFilename.replace(/\.csv$/, '');
-                    zipFilename = `${baseName}_1.csv`;
+                const chargeResult = await billing.chargeForDownload(unpurchasedFiles.length);
+
+                toast.dismiss(toastId2);
+
+                if (!chargeResult.success) {
+                    toast.error(`扣费失败: ${chargeResult.message}`);
+                    return { success: 0, failed: filenames };
                 }
 
-                zip.file(zipFilename, blob);
-                success++;
-            } catch {
-                failed.push(filename);
+                // 3. 扣费成功，批量标记已购买
+                const toastId3 = toast.loading('正在标记购买...');
+                await billing.markAsPurchased(unpurchasedFiles);
+                toast.dismiss(toastId3);
+
+                toast.success(`扣费成功，已扣除 ${totalCost} 积分`);
+            } else {
+                toast.success('所有文件均已购买，开始下载');
             }
-        }
 
-        // 生成 ZIP
-        if (success > 0) {
-            const content = await zip.generateAsync({ type: 'blob' });
-            const timestamp = new Date().toISOString().slice(0, 10);
-            saveAs(content, `datasets_${timestamp}.zip`);
-        }
+            // 4. 批量下载（所有文件都已购买）
+            const zip = new JSZip();
+            let successCount = 0;
 
-        // 显示结果
-        toast.dismiss(toastId);
-        if (failed.length > 0) {
-            toast.error(`成功: ${success}, 失败: ${failed.length}\n${failed.join(', ')}`);
-        } else {
-            toast.success(`已下载 ${success} 个文件`);
-        }
+            const toastId4 = toast.loading(`正在打包 ${filenames.length} 个文件...`);
 
-        return { success, failed };
+            for (const filename of filenames) {
+                try {
+                    const blob = await api.downloadDataset(filename);
+                    let zipFilename = filename.endsWith('.csv') ? filename : `${filename}.csv`;
+
+                    // 防重名逻辑
+                    if (zip.file(zipFilename)) {
+                        const baseName = zipFilename.replace(/\.csv$/, '');
+                        zipFilename = `${baseName}_1.csv`;
+                    }
+
+                    zip.file(zipFilename, blob);
+                    successCount++;
+                } catch (err) {
+                    console.error(`Failed to download ${filename}:`, err);
+                    failed.push(filename);
+                }
+            }
+
+            // 5. 生成 ZIP
+            if (successCount > 0) {
+                const content = await zip.generateAsync({ type: 'blob' });
+                const timestamp = new Date().toISOString().slice(0, 10);
+                saveAs(content, `datasets_${timestamp}.zip`);
+            }
+
+            // 6. 显示结果
+            toast.dismiss(toastId4);
+            if (failed.length > 0) {
+                toast.error(`成功: ${successCount}, 失败: ${failed.length}`);
+            } else {
+                toast.success(`已下载 ${successCount} 个文件`);
+            }
+
+            return { success: successCount, failed };
+
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : '批量下载失败';
+            toast.error(errorMsg);
+            return { success: 0, failed: filenames };
+        }
     }, []);
 
     /**

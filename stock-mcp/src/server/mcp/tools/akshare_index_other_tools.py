@@ -20,7 +20,7 @@ import akshare as ak
 import pandas as pd
 from fastmcp import FastMCP
 from src.server.utils.logger import logger
-from src.server.utils.request_context import get_current_user_id
+from src.server.utils.request_context import get_user_id_from_mcp_request
 from src.server.config.category_mapping import get_category
 from src.server.utils.data_cleaner import clean_csv_for_storage
 import os
@@ -66,7 +66,9 @@ def _save_data(df: pd.DataFrame, function_name: str) -> str:
     from src.server.core.dataset_manager import get_dataset_manager
     
     # 获取当前用户ID
-    user_id = get_current_user_id() or "anonymous"
+    user_id = get_user_id_from_mcp_request()
+    if not user_id:
+        raise ValueError("未授权：无法获取用户ID，请确保已通过 LibreChat 登录")
     
     # 获取中文名称和分类
     chinese_name = CHINESE_NAME_MAP.get(function_name, function_name)

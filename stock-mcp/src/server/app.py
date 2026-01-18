@@ -23,7 +23,7 @@ from src.server.core.health import router as health_router
 from src.server.api.routes import market_data_router, filings_router
 from src.server.core.dependencies import Container
 from src.server.utils.logger import logger
-from src.server.utils.request_context import set_current_user_id, clear_current_user_id
+from src.server.utils.request_context import set_current_user_id, clear_current_user_id, get_current_user_id
 from src.server.utils.user_id_resolver import get_user_id_resolver
 
 
@@ -48,26 +48,32 @@ class UserIdMiddleware(BaseHTTPMiddleware):
         logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] X-User-Id: {user_id_from_header}")
         logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] Authorization: {'Bearer ...' if auth_header else 'None'}")
         
-        # 3. 尝试从JWT提取邮箱并注册映射
+        # 3. 尝试从JWT提取邮箱并注册映射（用于日志和其他用途）
         resolved_email = None
         if auth_header and user_id_from_header:
             # 提取Bearer token
             if auth_header.startswith('Bearer '):
                 jwt_token = auth_header[7:]  # 移除 "Bearer " 前缀
-                
+
                 # 使用resolver解析JWT
                 resolver = get_user_id_resolver()
                 resolved_email = resolver.register_from_jwt(user_id_from_header, jwt_token)
-        
-        # 4. 确定最终使用的用户ID（优先使用邮箱）
-        final_user_id = resolved_email or user_id_from_header
-        
+
+        # 4. 确定最终使用的用户ID（统一使用 ObjectId，而非邮箱）
+        # 原因：ObjectId 更稳定，不含特殊字符，适合作为目录名
+        final_user_id = user_id_from_header
+
         if final_user_id:
             set_current_user_id(final_user_id)
+
+            # 🔍 验证：立即读取确认是否设置成功
+            verify_read = get_current_user_id()
+            logger.error(f"[验证-主中间件] set后立即读取: {repr(verify_read)}, 原值: {repr(final_user_id)}, 匹配: {verify_read == final_user_id}")
+
             if resolved_email:
-                logger.info(f"[UserIdMiddleware] ✅ 使用邮箱作为用户ID: {final_user_id}")
+                logger.info(f"[UserIdMiddleware] ✅ 使用 ObjectId: {final_user_id} (邮箱: {resolved_email})")
             else:
-                logger.info(f"[UserIdMiddleware] ✅ 使用原始用户ID: {final_user_id}")
+                logger.info(f"[UserIdMiddleware] ✅ 使用用户ID: {final_user_id}")
         else:
             logger.warning(f"[UserIdMiddleware] ⚠️ 未找到X-User-Id请求头！")
         
@@ -90,6 +96,25 @@ def create_app():
     try:
         mcp_server = create_mcp_server()
         mcp_app = mcp_server.streamable_http_app(path="/")
+
+        # 为 MCP 子应用添加 user_id 注入中间件（解决 app.mount 导致的 contextvars 丢失问题）
+        from starlette.middleware.base import BaseHTTPMiddleware
+
+        class MCPUserIdInjector(BaseHTTPMiddleware):
+            """MCP 子应用专用的 user_id 注入中间件"""
+            async def dispatch(self, request, call_next):
+                user_id = request.headers.get('X-User-Id')
+                if user_id:
+                    set_current_user_id(user_id)
+                    logger.debug(f"[MCPUserIdInjector] 设置 user_id: {user_id}")
+                try:
+                    return await call_next(request)
+                finally:
+                    clear_current_user_id()
+
+        mcp_app.add_middleware(MCPUserIdInjector)
+        logger.info("✅ MCP 子应用 user_id 中间件已配置")
+
     except Exception as e:
         logger.error(f"Failed to create MCP server: {e}", exc_info=True)
         logger.warning("⚠️  MCP server creation failed, MCP features will be disabled")

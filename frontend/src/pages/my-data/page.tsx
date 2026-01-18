@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import { categoryCountsSelector } from '../../store/filesStore';
 import { useTheme, getThemeColors } from '../../hooks/useTheme';
@@ -16,31 +16,30 @@ const categories: CategoryType[] = ['全部', '宏观数据', '利率数据', '�
 // 分类颜色映射
 const getCategoryColor = (category: string) => {
   const colorMap: Record<string, string> = {
-    '宏观数据': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    '利率数据': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    '外汇数据': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-    '期货': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-    '期权': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
-    '债券': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-    '现货': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-    '指数': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    'QDII': 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
-    '另类': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
-    '股票数据': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+    '宏观数据': 'bg-black text-white dark:bg-black dark:text-white',
+    '利率数据': 'bg-black text-white dark:bg-black dark:text-white',
+    '外汇数据': 'bg-black text-white dark:bg-black dark:text-white',
+    '期货': 'bg-black text-white dark:bg-black dark:text-white',
+    '期权': 'bg-black text-white dark:bg-black dark:text-white',
+    '债券': 'bg-black text-white dark:bg-black dark:text-white',
+    '现货': 'bg-black text-white dark:bg-black dark:text-white',
+    '指数': 'bg-black text-white dark:bg-black dark:text-white',
+    'QDII': 'bg-black text-white dark:bg-black dark:text-white',
+    '另类': 'bg-black text-white dark:bg-black dark:text-white',
+    '股票数据': 'bg-black text-white dark:bg-black dark:text-white',
   };
-  return colorMap[category] || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+  return colorMap[category] || 'bg-black text-white dark:bg-black dark:text-white';
 };
 
 export default function MyData() {
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
   const colors = getThemeColors(theme);
 
   // 自定义 hook，封装了数据获取和操作逻辑
   const {
     datasets,
     isLoading,
-    isAuthenticated,
     refresh,
     deleteDataset,
     downloadDataset,
@@ -64,7 +63,6 @@ export default function MyData() {
     isOpen: false,
     filename: ''
   });
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // 计算每个分类的数据数量
   const getCategoryCount = (category: CategoryType) => {
@@ -129,9 +127,7 @@ export default function MyData() {
 
   // 确认删除
   const handleConfirmDelete = async () => {
-    setIsDeleting(true);
     const success = await deleteDataset(deleteModalState.filename);
-    setIsDeleting(false);
     if (success) {
       setDeleteModalState({ isOpen: false, filename: '' });
       // 如果选中的项被删除了，也要从选中列表中移除
@@ -583,6 +579,14 @@ export default function MyData() {
           </div>
         )}
       </div>
+
+      {/* 删除确认弹窗 */}
+      <DeleteModal
+        isOpen={deleteModalState.isOpen}
+        filename={deleteModalState.filename}
+        onClose={() => setDeleteModalState({ isOpen: false, filename: '' })}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

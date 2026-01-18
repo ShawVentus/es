@@ -28,21 +28,27 @@ body {
   min-height: 100vh;
 }
 
-/* 自定义滚动条样式 */
+/* 自定义滚动条样式 - 支持主题色 */
+:root {
+  --scrollbar-thumb: #ec4899;
+  --scrollbar-thumb-hover: #db2777;
+  --scrollbar-track: #f1f1f1;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ec4899;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #db2777;
+  background: var(--scrollbar-thumb-hover);
 }

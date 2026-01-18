@@ -191,15 +191,17 @@ def register_asset_tools(mcp: FastMCP):
     ) -> Dict[str, Any]:
         """Get historical price data (OHLCV) and save to user's dataset library.
 
-        **CRITICAL**: You MUST provide a descriptive filename for the output dataset.
-        The filename should be descriptive and unique (e.g., "BABA_2023_Annual_Prices").
-        
+        **CRITICAL**: You MUST provide a descriptive filename in CHINESE for the output dataset.
+        This tool requires CHINESE filename to maintain consistency with other data acquisition tools.
+
         Args:
             ticker: Asset ticker in EXCHANGE:SYMBOL format (use search_assets to find tickers)
             start_date: Start date (YYYY-MM-DD)
             end_date: End date (YYYY-MM-DD)
-            filename: **REQUIRED** Custom filename for the saved dataset (NO .csv extension needed).
-                      Example: "BABA_2023_Stock_Data", "Tesla_Q4_Prices"
+            filename: **REQUIRED** Custom filename in CHINESE for the saved dataset (NO .csv extension needed).
+                      **IMPORTANT**: Use CHINESE names for semantic clarity and consistency.
+                      ✅ Good examples: "阿里巴巴2023年度股价", "特斯拉Q4历史行情", "茅台月度数据2024"
+                      ❌ Bad examples: "BABA_2023_Stock_Data", "Tesla_Q4_Prices" (English names not recommended)
             interval: Data interval (1d, 1wk, 1mo)
 
         Returns:
@@ -207,8 +209,7 @@ def register_asset_tools(mcp: FastMCP):
         """
         import pandas as pd
         from src.server.core.dataset_manager import get_dataset_manager
-        from src.server.utils.request_context import get_current_user_id
-        
+
         try:
             # 验证 filename 参数
             if not filename or not filename.strip():
@@ -243,32 +244,16 @@ def register_asset_tools(mcp: FastMCP):
             # 转换为 DataFrame
             df = pd.DataFrame([p.to_dict() for p in prices])
             
-            # 🔧 修复：使用 FastMCP 的 get_http_headers() 获取用户ID
-            from fastmcp.server.dependencies import get_http_headers
-            
-            user_id = None
-            
-            # 从 HTTP 请求头中获取 X-User-Id
-            headers = get_http_headers()
-            if headers:
-                # get_http_headers() 返回的键是小写的
-                user_id = headers.get('x-user-id')
-                logger.info(f"🔍 [DEBUG] 从 HTTP headers 获取 user_id: {user_id}")
-                logger.info(f"🔍 [DEBUG] 所有 HTTP headers: {headers}")
-            else:
-                logger.warning("⚠️ get_http_headers() 返回 None")
-            
-            # Fallback: 从请求上下文变量中获取
+            # 从 FastMCP 的 http_request ContextVar 获取用户ID
+            from src.server.utils.request_context import get_user_id_from_mcp_request
+            logger.error(f"🔍 [调试] 准备获取 user_id, prices 数量: {len(prices)}")
+
+            user_id = get_user_id_from_mcp_request()
+            logger.error(f"🔍 [调试] get_user_id_from_mcp_request() 返回: {repr(user_id)}, type: {type(user_id)}")
+
             if not user_id:
-                user_id = get_current_user_id()
-                logger.info(f"🔍 [DEBUG] Fallback 从 get_current_user_id() 获取: {user_id}")
-            
-            if not user_id:
-                # 如果没有用户ID，使用默认值（用于调试）
-                user_id = "anonymous"
-                logger.warning("⚠️ No user_id found from any source, using 'anonymous'")
-            
-            logger.info(f"🔍 [DEBUG] 最终使用的 user_id: {user_id}")
+                raise ValueError("未授权：无法获取用户ID，请确保已通过 LibreChat 登录")
+            logger.info(f"✅ [MCP工具] 成功获取 user_id: {user_id}")
 
             # 清洗数据：删除空值，规范化日期
             df_cleaned = clean_csv_for_storage(df)

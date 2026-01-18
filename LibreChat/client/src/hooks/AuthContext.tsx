@@ -99,7 +99,7 @@ const AuthContextProvider = ({
             email: user?.email,
             role: user?.role
           }
-        }, '*');
+        }, 'http://localhost:3001');
       }
     },
     onError: (error: TResError | unknown) => {
@@ -171,7 +171,7 @@ const AuthContextProvider = ({
                 email: user?.email,
                 role: user?.role
               }
-            }, '*');
+            }, 'http://localhost:3001');
           }
         } else {
           console.log('Token is not present. User is not authenticated.');
@@ -216,6 +216,31 @@ const AuthContextProvider = ({
     silentRefresh,
     setUserContext,
   ]);
+
+  // 监听来自父窗口的认证状态查询
+  useEffect(() => {
+    const handleParentMessage = (event: MessageEvent) => {
+      if (event.data.type === 'QUERY_AUTH_STATUS') {
+        // 回复当前认证状态
+        if (window.parent !== window && isAuthenticated && user) {
+          window.parent.postMessage({
+            type: 'LIBRECHAT_AUTH_STATUS',
+            isAuthenticated: true,
+            token,
+            user: {
+              id: user?.id,
+              name: user?.name,
+              email: user?.email,
+              role: user?.role
+            }
+          }, 'http://localhost:3001');
+        }
+      }
+    };
+
+    window.addEventListener('message', handleParentMessage);
+    return () => window.removeEventListener('message', handleParentMessage);
+  }, [isAuthenticated, token, user]);
 
   useEffect(() => {
     const handleTokenUpdate = (event) => {

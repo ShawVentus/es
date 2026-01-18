@@ -11,6 +11,10 @@ from src.server.domain.services.models.var_service import VARVECMService
 from src.server.utils.request_context import get_current_user_id
 from src.server.utils.logger import logger
 import json
+import numpy as np
+from scipy.stats import jarque_bera
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.stats.diagnostic import acorr_ljungbox, het_arch
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -243,6 +247,101 @@ def _load_multivariate_data(
     merged = pd.concat(dfs, axis=1).dropna()
     return merged
 
+def _run_residual_tests(residuals: List[float]) -> dict:
+    """
+    对模型残差运行诊断检验
+
+    Args:
+        residuals: 残差序列（可能包含None）
+
+    Returns:
+        检验结果字典
+    """
+    # 过滤None值和NaN值（兼容字符串类型）
+    clean_residuals = []
+    for r in residuals:
+        if r is None:
+            continue
+        # 尝试转换为float
+        try:
+            val = float(r)
+            if not np.isnan(val) and not np.isinf(val):
+                clean_residuals.append(val)
+        except (ValueError, TypeError):
+            continue
+
+    if len(clean_residuals) < 20:
+        return {"error": "残差样本量不足，无法进行检验"}
+
+    residual_series = pd.Series(clean_residuals)
+
+    tests = {}
+
+    # 1. ADF检验（残差平稳性）
+    try:
+        adf_result = adfuller(residual_series, autolag='AIC')
+        tests['adf'] = {
+            "test_statistic": float(adf_result[0]),
+            "p_value": float(adf_result[1]),
+            "used_lag": int(adf_result[2]),
+            "is_stationary": bool(adf_result[1] < 0.05),
+            "conclusion": "残差平稳" if adf_result[1] < 0.05 else "残差非平稳"
+        }
+    except Exception as e:
+        tests['adf'] = {"error": str(e)}
+
+    # 2. JB正态性检验
+    try:
+        jb_stat, jb_pval = jarque_bera(residual_series)
+        tests['jb'] = {
+            "test_statistic": float(jb_stat),
+            "p_value": float(jb_pval),
+            "is_normal": bool(jb_pval > 0.05),
+            "n_observations": len(clean_residuals),
+            "conclusion": "残差服从正态分布" if jb_pval > 0.05 else "残差不服从正态分布"
+        }
+    except Exception as e:
+        tests['jb'] = {"error": str(e)}
+
+    # 3. Ljung-Box自相关检验
+    try:
+        max_lags = min(20, len(clean_residuals) // 4)
+        if max_lags < 1:
+            max_lags = 1
+        # 确保lags < 样本量（statsmodels要求）
+        max_lags = min(max_lags, len(clean_residuals) - 1)
+        lb_result = acorr_ljungbox(residual_series, lags=max_lags, return_df=True)
+        # 使用最后一个滞后阶数的结果
+        tests['ljung_box'] = {
+            "test_statistic": float(lb_result['lb_stat'].iloc[-1]),
+            "p_value": float(lb_result['lb_pvalue'].iloc[-1]),
+            "selected_lag": max_lags,
+            "has_autocorrelation": bool(lb_result['lb_pvalue'].iloc[-1] < 0.05),
+            "conclusion": "残差存在自相关" if lb_result['lb_pvalue'].iloc[-1] < 0.05 else "残差无显著自相关"
+        }
+    except Exception as e:
+        tests['ljung_box'] = {"error": str(e)}
+
+    # 4. ARCH LM检验
+    try:
+        max_lags = min(10, len(clean_residuals) // 4)
+        if max_lags < 1:
+            max_lags = 1
+        # 确保nlags < 样本量
+        max_lags = min(max_lags, len(clean_residuals) - 1)
+        arch_result = het_arch(residual_series, nlags=max_lags)
+        tests['arch_lm'] = {
+            "lm_statistic": float(arch_result[0]),
+            "lm_p_value": float(arch_result[1]),
+            "selected_lag": max_lags,
+            "has_arch_effect": bool(arch_result[1] < 0.05),
+            "conclusion": "残差存在ARCH效应" if arch_result[1] < 0.05 else "残差无ARCH效应"
+        }
+    except Exception as e:
+        tests['arch_lm'] = {"error": str(e)}
+
+    return tests
+
 def _save_model_result(result: dict, model_type: str, user_id: str) -> tuple:
     """
     保存模型结果到report文件夹
@@ -287,6 +386,11 @@ async def fit_arima(request: ARIMARequest):
         result = service.fit_arima(series, order=order)
 
         if result.get("success"):
+            # 运行残差检验
+            residuals = result.get("data", {}).get("residuals", [])
+            if residuals:
+                result["residual_tests"] = _run_residual_tests(residuals)
+
             report_id, model_path = _save_model_result(result, "arima", user_id)
             result["report_id"] = report_id
             result["model_json_path"] = model_path
@@ -323,6 +427,11 @@ async def fit_arma(request: ARIMARequest):
         result = service.fit_arma(series, order=order)
 
         if result.get("success"):
+            # 运行残差检验
+            residuals = result.get("data", {}).get("residuals", [])
+            if residuals:
+                result["residual_tests"] = _run_residual_tests(residuals)
+
             report_id, model_path = _save_model_result(result, "arma", user_id)
             result["report_id"] = report_id
             result["model_json_path"] = model_path
@@ -364,6 +473,11 @@ async def fit_garch(request: GARCHRequest):
         )
 
         if result.get("success"):
+            # 运行残差检验
+            residuals = result.get("data", {}).get("residuals", [])
+            if residuals:
+                result["residual_tests"] = _run_residual_tests(residuals)
+
             report_id, model_path = _save_model_result(result, "garch", user_id)
             result["report_id"] = report_id
             result["model_json_path"] = model_path
@@ -405,6 +519,11 @@ async def fit_arch(request: GARCHRequest):
         )
 
         if result.get("success"):
+            # 运行残差检验
+            residuals = result.get("data", {}).get("residuals", [])
+            if residuals:
+                result["residual_tests"] = _run_residual_tests(residuals)
+
             report_id, model_path = _save_model_result(result, "arch", user_id)
             result["report_id"] = report_id
             result["model_json_path"] = model_path
@@ -443,6 +562,14 @@ async def fit_var(request: VARRequest):
         )
 
         if result.get("success"):
+            # 运行残差检验（使用第一个变量的残差）
+            residuals_dict = result.get("data", {}).get("residuals", {})
+            if residuals_dict and isinstance(residuals_dict, dict) and len(residuals_dict) > 0:
+                first_var = list(residuals_dict.keys())[0]
+                residuals = residuals_dict[first_var]
+                if residuals:  # 确保残差列表不为空
+                    result["residual_tests"] = _run_residual_tests(residuals)
+
             report_id, model_path = _save_model_result(result, "var", user_id)
             result["report_id"] = report_id
             result["model_json_path"] = model_path
@@ -482,6 +609,14 @@ async def fit_vecm(request: VECMRequest):
         )
 
         if result.get("success"):
+            # 运行残差检验（使用第一个变量的残差）
+            residuals_dict = result.get("data", {}).get("residuals", {})
+            if residuals_dict and isinstance(residuals_dict, dict) and len(residuals_dict) > 0:
+                first_var = list(residuals_dict.keys())[0]
+                residuals = residuals_dict[first_var]
+                if residuals:  # 确保残差列表不为空
+                    result["residual_tests"] = _run_residual_tests(residuals)
+
             report_id, model_path = _save_model_result(result, "vecm", user_id)
             result["report_id"] = report_id
             result["model_json_path"] = model_path

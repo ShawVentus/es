@@ -44,7 +44,7 @@ export default function AgentIframe() {
             if (iframeRef.current && agentUrl) {
                 iframeRef.current.contentWindow?.postMessage(
                     { type: 'QUERY_AUTH_STATUS' },
-                    agentUrl
+                    window.location.origin
                 );
             }
         }, 500);
@@ -63,7 +63,7 @@ export default function AgentIframe() {
             log('Visibility changed to true, syncing state...');
             iframeRef.current.contentWindow?.postMessage(
                 { type: 'QUERY_AUTH_STATUS' },
-                agentUrl
+                window.location.origin
             );
         }
     }, [isVisible, hasLoaded, agentUrl]);

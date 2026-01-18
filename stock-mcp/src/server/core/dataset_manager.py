@@ -77,6 +77,9 @@ class DatasetManager:
     
     # 表头预览行数
     HEAD_ROWS_COUNT = 10
+
+    # 表尾预览行数
+    TAIL_ROWS_COUNT = 10
     
     def __init__(self, base_dir: Optional[str] = None):
         """
@@ -392,20 +395,25 @@ class DatasetManager:
             
             # 读取 CSV 数据
             df = pd.read_csv(csv_path)
-            
+
             # 生成趋势图采样点
             chart_points = self._sample_chart_points(df)
-            
+
             # 获取前 N 行
             head_rows = df.head(self.HEAD_ROWS_COUNT).values.tolist()
             columns = list(df.columns)
-            
+
+            # 获取后 N 行
+            tail_rows = df.tail(self.TAIL_ROWS_COUNT).values.tolist()
+
             return {
                 "success": True,
                 "meta": meta,
                 "chart_points": chart_points,
                 "head_rows": head_rows,
-                "columns": columns
+                "tail_rows": tail_rows,
+                "columns": columns,
+                "total_rows": len(df)
             }
             
         except Exception as e:
