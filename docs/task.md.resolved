@@ -1,0 +1,32 @@
+# 前端整合任务清单
+
+## 阶段1：原型验证（1小时）
+- [x] 创建简化版 [FinanceHeader](file:///root/LibreChat/client/src/components/Finance/Header.tsx#26-99) 组件
+- [x] 修改 [Root.tsx](file:///root/LibreChat/client/src/routes/Root.tsx) 包裹 Header
+- [ ] 验证 `/c/new` 布局正确（无滚动条/遮挡）
+
+## 阶段2：基础架构（0.5天）
+- [x] 配置 Vite proxy（4条规则）
+- [x] 创建 `components/Finance/` 目录结构
+- [x] 复制 `logo.png` 到 public 目录
+
+## 阶段3：代码迁移（1天）
+- [x] 迁移 Header 组件（适配 useAuthContext）
+- [/] 迁移 6 个页面组件（首页完成，其他占位）
+- [x] 迁移 hooks/api/store 模块
+- [x] Recoil atom key 加 `finance/` 前缀
+- [x] localStorage.getItem 改为 useAuthContext
+
+## 阶段4：路由配置（0.5天）
+- [x] 添加金融页面路由到 Root children
+- [x] 修改根路径为金融首页
+- [ ] Nav.tsx 添加金融模块入口链接
+- [x] "数据获取"链接改为 `/c/new`
+
+## 阶段5：测试修复（1天）
+- [ ] 测试首页
+- [ ] 测试聊天页（Header + 侧边栏）
+- [ ] 测试我的数据页
+- [ ] 测试模型构建页
+- [ ] 测试报告分析页
+- [ ] 修复样式/布局问题

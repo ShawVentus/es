@@ -1,0 +1,402 @@
+Welcome to Bohrium Web Shell!
+
+    (base) root @launching-79563 - deployment - 65d79fc755 - cg9fh: /# ls -la /root / LibreChat / client / dist / assets / | head - 20
+total 21192st / assets / | head - 20oyment - 65d79fc755 - cg9fh: /# ls -la /root / LibreChat
+drwxr - xr - x 3 root root   12288 Jan 20 00: 23 .
+    drwxr - xr - x 3 root root    4096 Jan 20 00: 23 ..
+- rw - r--r-- 1 root root   10229 Jan 19 18: 51 AccountSettings.DvWSdfg4.js
+    - rw - r--r-- 1 root root    2738 Jan 19 18: 51 BookmarkNav.ClFnRSYw.js
+        - rw - r--r-- 1 root root    7423 Jan 19 18: 51 DataPreview.D1rIqLq6.js
+            - rw - r--r-- 1 root root    7796 Jan 19 18: 51 Home.DF6ZrLtk.js
+                - rw - r--r-- 1 root root   36862 Jan 19 18: 51 ModelBuilding.D7nDnGO3.js
+                    - rw - r--r-- 1 root root    6895 Jan 19 18: 51 ModelBuilding.D7nDnGO3.js.br
+                        - rw - r--r-- 1 root root    8120 Jan 19 18: 51 ModelBuilding.D7nDnGO3.js.gz
+                            - rw - r--r-- 1 root root   26442 Jan 19 18: 51 MyData.CmeBWLHQ.js
+                                - rw - r--r-- 1 root root    5934 Jan 19 18: 51 MyData.CmeBWLHQ.js.br
+                                    - rw - r--r-- 1 root root    6944 Jan 19 18: 51 MyData.CmeBWLHQ.js.gz
+                                        - rw - r--r-- 1 root root   34985 Jan 19 18: 51 ReportAnalysis.DWuuCosn.js
+                                            - rw - r--r-- 1 root root    6581 Jan 19 18: 51 ReportAnalysis.DWuuCosn.js.br
+                                                - rw - r--r-- 1 root root    7781 Jan 19 18: 51 ReportAnalysis.DWuuCosn.js.gz
+                                                    - rw - r--r-- 1 root root   40303 Jan 19 18: 51 advanced - inputs.BT-04enC.js
+                                                        - rw - r--r-- 1 root root   12239 Jan 19 18: 51 advanced - inputs.BT-04enC.js.br
+                                                            - rw - r--r-- 1 root root   13629 Jan 19 18: 51 advanced - inputs.BT-04enC.js.gz
+                                                                (base) root @launching-79563 - deployment - 65d79fc755 - cg9fh: /# find /root / LibreChat - name "vendor.*.js" 2 > /dev/null
+find / root / LibreChat - name "index.*.js" 2 > /dev/nullg9fh: /# find /root / LibreChat -
+    /root/LibreChat / client / dist / assets / vendor.DvOPNAD8.js
+    / root / LibreChat / client / dist / assets / index.GAu1MZSD.js
+    / root / LibreChat / packages / data - provider / dist / index.es.js
+    / root / LibreChat / packages / data - provider / dist / react - query / index.es.js
+    / root / LibreChat / packages / client / dist / index.es.js
+    / root / LibreChat / packages / client / node_modules / @tanstack / react - table / build / lib / index.esm.js
+    / root / LibreChat / packages / client / node_modules / @tanstack / react - table / build / umd / index.development.js
+    / root / LibreChat / packages / client / node_modules / @tanstack / react - table / build / umd / index.production.js
+    / root / LibreChat / packages / client / node_modules / @tanstack / table - core / build / lib / index.esm.js
+    / root / LibreChat / packages / client / node_modules / @tanstack / table - core / build / umd / index.development.js
+    / root / LibreChat / packages / client / node_modules / @tanstack / table - core / build / umd / index.production.js
+    / root / LibreChat / packages / client / node_modules / react - hook - form / dist / index.cjs.js
+    / root / LibreChat / packages / client / node_modules / react - hook - form / dist / index.umd.js
+    / root / LibreChat / packages / data - schemas / dist / index.es.js
+    / root / LibreChat / node_modules / flip - toolkit / lib / index.es.js
+    / root / LibreChat / node_modules / flip - toolkit / lib / index.umd.js
+    / root / LibreChat / node_modules / gensync / test / index.test.js
+    / root / LibreChat / node_modules / nanoid / index.browser.js
+    / root / LibreChat / node_modules / nanoid / async / index.browser.js
+    / root / LibreChat / node_modules / nanoid / async / index.native.js
+    / root / LibreChat / node_modules / diff / lib / index.es6.js
+    / root / LibreChat / node_modules / react - flip - toolkit / lib / index.es.js
+    / root / LibreChat / node_modules / react - flip - toolkit / lib / index.umd.js
+    / root / LibreChat / node_modules / react - flip - toolkit / lib / index.modern.js
+    / root / LibreChat / node_modules / use - sync - external - store / shim / index.native.js
+    / root / LibreChat / node_modules / @tanstack / match - sorter - utils / build / lib / index.esm.js
+    / root / LibreChat / node_modules / @tanstack / match - sorter - utils / build / umd / index.development.js
+    / root / LibreChat / node_modules / @tanstack / match - sorter - utils / build / umd / index.production.js
+    / root / LibreChat / node_modules / @tanstack / react - query / build / lib / index.esm.js
+    / root / LibreChat / node_modules / @tanstack / react - query / build / umd / index.development.js
+    / root / LibreChat / node_modules / @tanstack / react - query / build / umd / index.production.js
+    / root / LibreChat / node_modules / @tanstack / query - core / build / lib / index.esm.js
+    / root / LibreChat / node_modules / @tanstack / query - core / build / umd / index.development.js
+    / root / LibreChat / node_modules / @tanstack / query - core / build / umd / index.production.js
+    / root / LibreChat / node_modules / @tanstack / react - table / build / lib / index.esm.js
+    / root / LibreChat / node_modules / @tanstack / react - table / build / umd / index.development.js
+    / root / LibreChat / node_modules / @tanstack / react - table / build / umd / index.production.js
+    / root / LibreChat / node_modules / @tanstack / table - core / build / lib / index.esm.js
+    / root / LibreChat / node_modules / @tanstack / table - core / build / umd / index.development.js
+    / root / LibreChat / node_modules / @tanstack / table - core / build / umd / index.production.js
+    / root / LibreChat / node_modules / @tanstack / react - query - devtools / build / lib / index.prod.esm.js
+    / root / LibreChat / node_modules / @tanstack / react - query - devtools / build / lib / index.esm.js
+    / root / LibreChat / node_modules / @tanstack / react - query - devtools / build / lib / index.prod.js
+    / root / LibreChat / node_modules / @tanstack / react - query - devtools / build / umd / index.development.js
+    / root / LibreChat / node_modules / @tanstack / react - query - devtools / build / umd / index.production.js
+    / root / LibreChat / node_modules / pstree.remy / tests / index.test.js
+    / root / LibreChat / node_modules / goober / src / __tests__ / index.test.js
+    / root / LibreChat / node_modules / firebase / compat / analytics / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / analytics / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / performance / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / performance / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / app - check / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / app - check / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / installations / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / installations / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / app / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / app / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / dist / index.rn.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / messaging / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / messaging / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / storage / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / storage / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / database / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / database / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / functions / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / functions / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / auth / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / auth / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / firestore / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / firestore / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / compat / remote - config / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / compat / remote - config / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / analytics / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / analytics / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / performance / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / performance / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / app - check / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / app - check / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / installations / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / installations / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / app / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / app / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / data - connect / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / data - connect / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / messaging / sw / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / messaging / sw / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / messaging / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / messaging / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / storage / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / storage / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / database / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / database / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / functions / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / functions / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / auth / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / auth / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / auth / cordova / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / auth / cordova / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / auth / web - extension / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / auth / web - extension / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / firestore / lite / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / firestore / lite / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / firestore / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / firestore / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / vertexai / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / vertexai / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / firebase / remote - config / dist / index.cjs.js
+    / root / LibreChat / node_modules / firebase / remote - config / dist / esm / index.esm.js
+    / root / LibreChat / node_modules / @sinonjs / commons / lib / prototypes / index.test.js
+    / root / LibreChat / node_modules / @sinonjs / commons / lib / index.test.js
+    / root / LibreChat / node_modules / react - hook - form / dist / index.cjs.js
+    / root / LibreChat / node_modules / react - hook - form / dist / index.umd.js
+    / root / LibreChat / node_modules / @firebase / auth - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / auth - compat / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / auth - compat / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / auth - compat / dist / esm / index.node.esm.js
+    / root / LibreChat / node_modules / @firebase / app - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / app - compat / dist / index.lite.js
+    / root / LibreChat / node_modules / @firebase / app - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / database - compat / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / database - compat / dist / index.standalone.js
+    / root / LibreChat / node_modules / @firebase / analytics / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / analytics / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / performance / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / performance / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / analytics - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / analytics - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / firestore - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / firestore - compat / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / firestore - compat / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / firestore - compat / dist / node - esm / index.node.esm.js
+    / root / LibreChat / node_modules / @firebase / firestore - compat / dist / index.rn.js
+    / root / LibreChat / node_modules / @firebase / installations - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / installations - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / storage - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / storage - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / app - check / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / app - check / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / installations / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / installations / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / app / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / app / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / util / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / util / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / util / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / util / dist / node - esm / index.node.esm.js
+    / root / LibreChat / node_modules / @firebase / performance - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / performance - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / app - check - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / app - check - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / data - connect / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / data - connect / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / data - connect / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / data - connect / dist / node - esm / index.node.esm.js
+    / root / LibreChat / node_modules / @firebase / messaging / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / messaging / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / messaging / dist / esm / index.sw.esm2017.js
+    / root / LibreChat / node_modules / @firebase / storage / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / storage / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / storage / dist / index.browser.cjs.js
+    / root / LibreChat / node_modules / @firebase / storage / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / storage / dist / node - esm / index.node.esm.js
+    / root / LibreChat / node_modules / @firebase / database / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / database / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / database / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / database / dist / node - esm / index.node.esm.js
+    / root / LibreChat / node_modules / @firebase / database / dist / index.standalone.js
+    / root / LibreChat / node_modules / @firebase / functions / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / functions / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / auth / dist / index.webworker.js
+    / root / LibreChat / node_modules / @firebase / messaging - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / messaging - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / lite / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / lite / index.rn.esm2017.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / lite / index.browser.esm2017.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / lite / index.node.cjs.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / firestore / dist / index.rn.js
+    / root / LibreChat / node_modules / @firebase / logger / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / logger / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / component / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / component / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / functions - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / functions - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / vertexai / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / vertexai / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / remote - config / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / remote - config / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / @firebase / remote - config - compat / dist / index.cjs.js
+    / root / LibreChat / node_modules / @firebase / remote - config - compat / dist / esm / index.esm2017.js
+    / root / LibreChat / node_modules / glob / node_modules / lru - cache / dist / commonjs / index.min.js
+    / root / LibreChat / node_modules / glob / node_modules / lru - cache / dist / esm / index.min.js
+    / root / LibreChat / node_modules / eslint / node_modules / json - schema - traverse / spec / index.spec.js
+    / root / LibreChat / node_modules / tailwindcss / lib / value - parser / index.d.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - context / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - compose - refs / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - primitive / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - presence / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - slot / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - dismissable - layer / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - focus - guards / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - use - escape - keydown / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - use - callback - ref / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - portal / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - use - layout - effect / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - id / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / primitive / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - focus - scope / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - dialog / node_modules / @radix - ui / react - use - controllable - state / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - alert - dialog / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - alert - dialog / node_modules / @radix - ui / react - context / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - alert - dialog / node_modules / @radix - ui / react - compose - refs / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - alert - dialog / node_modules / @radix - ui / react - primitive / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - alert - dialog / node_modules / @radix - ui / react - slot / dist / index.module.js
+    / root / LibreChat / node_modules / @radix - ui / react - alert - dialog / node_modules / @radix - ui / primitive / dist / index.module.js
+    / root / LibreChat / node_modules / @xtuc / ieee754 / dist / index.cjs.js
+    / root / LibreChat / node_modules / @aws - sdk / client - bedrock - agent - runtime / node_modules / @aws - sdk / util - user - agent - browser / dist - es / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / client - bedrock - agent - runtime / node_modules / @aws - sdk / util - user - agent - browser / dist - cjs / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / util - user - agent - browser / dist - es / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / util - user - agent - browser / dist - cjs / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / credential - provider - node / node_modules / @aws - sdk / util - user - agent - browser / dist - es / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / credential - provider - node / node_modules / @aws - sdk / util - user - agent - browser / dist - cjs / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / credential - provider - node / node_modules / @aws - sdk / credential - provider - http / dist - es / index.browser.js
+    / root / LibreChat / node_modules / @aws - sdk / credential - provider - node / node_modules / @aws - sdk / credential - provider - http / dist - cjs / index.browser.js
+    / root / LibreChat / node_modules / @aws - sdk / credential - provider - http / dist - es / index.browser.js
+    / root / LibreChat / node_modules / @aws - sdk / credential - provider - http / dist - cjs / index.browser.js
+    / root / LibreChat / node_modules / @aws - sdk / client - kendra / node_modules / @aws - sdk / util - user - agent - browser / dist - es / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / client - kendra / node_modules / @aws - sdk / util - user - agent - browser / dist - cjs / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / nested - clients / node_modules / @aws - sdk / util - user - agent - browser / dist - es / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / nested - clients / node_modules / @aws - sdk / util - user - agent - browser / dist - cjs / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / client - s3 / node_modules / @aws - sdk / util - user - agent - browser / dist - es / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / client - s3 / node_modules / @aws - sdk / util - user - agent - browser / dist - cjs / index.native.js
+    / root / LibreChat / node_modules / @aws - sdk / client - s3 / node_modules / @aws - sdk / credential - provider - http / dist - es / index.browser.js
+    / root / LibreChat / node_modules / @aws - sdk / client - s3 / node_modules / @aws - sdk / credential - provider - http / dist - cjs / index.browser.js
+    / root / LibreChat / node_modules / @stitches / core / dist / index.global.js
+    / root / LibreChat / node_modules / pkce - challenge / dist / index.browser.js
+    / root / LibreChat / node_modules / pkce - challenge / dist / index.node.js
+    / root / LibreChat / node_modules / @asamuzakjp / css - color / node_modules / lru - cache / dist / commonjs / index.min.js
+    / root / LibreChat / node_modules / @asamuzakjp / css - color / node_modules / lru - cache / dist / esm / index.min.js
+    / root / LibreChat / node_modules / node - fetch / lib / index.es.js
+    / root / LibreChat / node_modules / ldapjs / test / lib / client / message - tracker / index.test.js
+    / root / LibreChat / node_modules / swr / dist / _internal / index.react - server.js
+    / root / LibreChat / node_modules / @azure / storage - blob / dist - esm / storage - internal - avro / src / index.browser.js
+    / root / LibreChat / node_modules / @azure / storage - blob / dist - esm / storage - common / src / index.browser.js
+    / root / LibreChat / node_modules / @azure / storage - blob / dist - esm / storage - blob / src / index.browser.js
+    / root / LibreChat / node_modules / prettier - linter - helpers / test / index.test.js
+    / root / LibreChat / node_modules / eventsource - parser / dist / index.esm.js
+    / root / LibreChat / node_modules / json - schema - traverse / spec / index.spec.js
+    / root / LibreChat / node_modules / tabbable / dist / index.umd.min.js
+    / root / LibreChat / node_modules / tabbable / dist / index.min.js
+    / root / LibreChat / node_modules / tabbable / dist / index.esm.js
+    / root / LibreChat / node_modules / tabbable / dist / index.umd.js
+    / root / LibreChat / node_modules / tabbable / dist / index.esm.min.js
+    / root / LibreChat / node_modules / jotai / umd / index.development.js
+    / root / LibreChat / node_modules / jotai / umd / index.production.js
+    / root / LibreChat / node_modules / jotai / system / index.development.js
+    / root / LibreChat / node_modules / jotai / system / index.production.js
+    / root / LibreChat / node_modules / tldts / dist / index.umd.min.js
+    / root / LibreChat / node_modules / tldts / dist / index.esm.min.js
+    / root / LibreChat / node_modules / tldts / dist / index.cjs.min.js
+    / root / LibreChat / node_modules / mathjs / lib / esm / expression / transform / index.transform.js
+    / root / LibreChat / node_modules / mathjs / lib / cjs / expression / transform / index.transform.js
+    / root / LibreChat / node_modules / recoil / umd / index.min.js
+    / root / LibreChat / node_modules / hookified / dist / browser / index.global.js
+    / root / LibreChat / node_modules / @eslint / eslintrc / node_modules / json - schema - traverse / spec / index.spec.js
+    / root / LibreChat / node_modules / ts - node / node_modules / diff / lib / index.es6.js
+    / root / LibreChat / node_modules / dequal / lite / index.min.js
+    / root / LibreChat / node_modules / dequal / dist / index.min.js
+    / root / LibreChat / node_modules / workbox - build / node_modules / @rollup / plugin - babel / dist / index.es.js
+    / root / LibreChat / node_modules / klona / json / index.min.js
+    / root / LibreChat / node_modules / klona / lite / index.min.js
+    / root / LibreChat / node_modules / klona / full / index.min.js
+    / root / LibreChat / node_modules / klona / dist / index.min.js
+    / root / LibreChat / node_modules / decode - named - character - reference / index.dom.js
+    / root / LibreChat / node_modules / htm / react / index.umd.js
+    / root / LibreChat / node_modules / htm / react / index.module.js
+    / root / LibreChat / node_modules / htm / preact / index.umd.js
+    / root / LibreChat / node_modules / htm / preact / index.module.js
+    / root / LibreChat / node_modules / htm / mini / index.umd.js
+    / root / LibreChat / node_modules / htm / mini / index.module.js
+    / root / LibreChat / node_modules / json5 / dist / index.min.js
+    / root / LibreChat / node_modules / playwright - core / lib / vite / traceViewer / index.Bx16ehp1.js
+    / root / LibreChat / node_modules /export -from - json / dist / umd / index.min.js
+        / root / LibreChat / node_modules / readable - web - to - node - stream / lib / index.spec.js
+        / root / LibreChat / node_modules / postcss - clamp / index.test.js
+            (base) root @launching-79563 - deployment - 65d79fc755 - cg9fh: /# curl -I http:/ / 127.0.0.1: 3080 / assets / vendor.DvOPNAD8.js
+HTTP / 1.1 503 Connect failedNAD8.jsment - 65d79fc755 - cg9fh: /# curl -I http:/ / 127.0.0
+Content - Length: 6660
+Content - Type: text / html
+Cache - Control: no - cache
+Date: Mon, 19 Jan 2026 16: 53: 28 GMT
+Last - Modified: Wed, 08 Jun 1955 12:00:00 GMT
+Expires: Sat, 17 Jun 2000 12:00:00 GMT
+Pragma: no - cache
+    (base) root @launching-79563 - deployment - 65d79fc755 - cg9fh: /# curl -s http:/ / 127.0.0.1: 3080 / assets / vendor.DvOPNAD8.js | head - 5
+        < !DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd" >
+            <html>
+
+                (base) root@launching-79563-deployment-65d79fc755-cg9fh:/# grep -r "express.static\|sendFile\|serveStatic" /root/LibreChat/api/server/ --include="*.js" | head -10
+                /root/LibreChat/api/server/services/Endpoints/agents/initialize.js:    resendFiles: primaryConfig.resendFiles ?? true,
+/root/LibreChat/api/server/utils/__tests__/staticCache.spec.js:  describe('express-static-gzip behavior', () => {
+                    /root/LibreChat / api / server / utils / __tests__ / staticCache.spec.js:    it('should use express.static (no gzip) when skipGzipScan is true', async () => {
+                    /root/LibreChat / api / server / utils / staticCache.js:const expressStaticGzip = require('express-static-gzip');
+                /root/LibreChat/api/server/utils/staticCache.js: * @returns {ReturnType < expressStaticGzip >| ReturnType < express.static >} Express middleware function for serving static files
+                /root/LibreChat/api/server/utils/staticCache.js:    return express.static(staticPath, {
+                    (base) root@launching-79563-deployment-65d79fc755-cg9fh:/# cat /root/LibreChat/client/vite.config.ts | grep -A5 "base"
+                base: '',
+                server: {
+                    allowedHosts: process.env.VITE_ALLOWED_HOSTS && process.env.VITE_ALLOWED_HOSTS.split(',') || [],
+                host: process.env.HOST || 'localhost',
+                port: process.env.PORT && Number(process.env.PORT) || 3090,
+                (base) root@launching-79563-deployment-65d79fc755-cg9fh:/# tail -f /root/deploy/logs/librechat.log
+                2026-01-19 16:48:05 error: [MCP][stock-mcp] Transport error (may require manual intervention): SSE stream disconnected: AbortError: This operation was aborted
+                2026-01-19 16:48:05 info: [MCP][stock-mcp] Reconnecting 1/3 (delay: 2000ms)
+                2026-01-19 16:48:05 error: [MCP][stock-mcp] Transport error (may require manual intervention): SSE stream disconnected: AbortError: This operation was aborted
+                2026-01-19 16:48:05 info: [MCP] Initialized with 1 configured server and 67 tools.
+                2026-01-19 16:48:05 info: OAuth reconnect manager initialized successfully.
+                2026-01-19 16:48:05 info: [StreamServices] Created in-memory stream services
+                2026-01-19 16:48:05 info: [GenerationJobManager] Configured with in-memory stores
+                2026-01-19 16:48:07 info: [MCP][stock-mcp] Creating streamable-http transport: http://localhost:9898/mcp
+                2026-01-19 16:48:07 info: [MCP][stock-mcp] [DEBUG] options.headers:
+                2026-01-19 16:48:07 info: [MCP][stock-mcp] [DEBUG] merged headers:
+                grep -i "error\|404\|not found" /root/deploy/logs/librechat.log | tail -20
+
+                Welcome to Bohrium Web Shell!
+
+                (base) root@launching-79563-deployment-65d79fc755-cg9fh:/# cat /root/LibreChat/.env | grep -i "domain\|host\|url\|base"
+                HOST=0.0.0.0
+                DOMAIN_CLIENT=http://localhost:3080
+                DOMAIN_SERVER=http://localhost:3080
+                # 使用绝对路径、相对路径或 URL
+                # ASSISTANTS_BASE_URL=
+                # IMAGE_GEN_OAI_BASEURL= # 用于图像生成工具的自定义 OpenAI 基础 URL
+                # DALLE3_BASEURL=
+                # DALLE2_BASEURL=
+                FLUX_API_BASE_URL=https://api.us1.bfl.ai
+                # FLUX_API_BASE_URL = 'https://api.bfl.ml';
+                SD_WEBUI_URL=http://host.docker.internal:7860
+                MEILI_HOST=http://127.0.0.1:7700
+                RAG_API_URL=http://rag_api:8000
+                DISCORD_CALLBACK_URL=/oauth/discord/callback
+                FACEBOOK_CALLBACK_URL=/oauth/facebook/callback
+                GITHUB_CALLBACK_URL=/oauth/github/callback
+                # GITHUB_ENTERPRISE_BASE_URL=
+                GOOGLE_CALLBACK_URL=/oauth/google/callback
+                APPLE_CALLBACK_URL=/oauth/apple/callback
+                OPENID_CALLBACK_URL=/oauth/openid/callback
+                OPENID_IMAGE_URL=
+                OPENID_JWKS_URL_CACHE_ENABLED=
+                OPENID_JWKS_URL_CACHE_TIME= # 600000 ms 等于 10 分钟，留空以禁用缓存
+                # OpenID 注销后重定向的 URL (默认为 ${DOMAIN_CLIENT}/login)
+                # SharePoint 租户基础 URL (例如，https://yourtenant.sharepoint.com)
+                # SHAREPOINT_BASE_URL=https://yourtenant.sharepoint.com
+                SAML_CALLBACK_URL=/oauth/saml/callback
+                SAML_IMAGE_URL=
+                LDAP_URL=
+                LDAP_USER_SEARCH_BASE=
+                EMAIL_ENCRYPTION_HOSTNAME=
+                # MAILGUN_DOMAIN=mg.yourdomain.com
+                # EMAIL_FROM=noreply@yourdomain.com
+                # MAILGUN_HOST=https://api.eu.mailgun.net
+                # Firebase CDN           #
+                FIREBASE_API_KEY=
+                FIREBASE_AUTH_DOMAIN=
+                FIREBASE_PROJECT_ID=
+                FIREBASE_STORAGE_BUCKET=
+                FIREBASE_MESSAGING_SENDER_ID=
+                FIREBASE_APP_ID=
+                AWS_ENDPOINT_URL=
+                HELP_AND_FAQ_URL=https://librechat.ai
+                # Optional: Custom Firecrawl API URL
+                # FIRECRAWL_API_URL=your_firecrawl_api_url
+                BOHRIUM_API_URL=https://openapi.dp.tech/openapi/v1/ak/user
+                (base) root@launching-79563-deployment-65d79fc755-cg9fh:/# 

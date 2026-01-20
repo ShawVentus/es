@@ -28,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
       <App />
       <Toaster
         position="top-right"
+        containerStyle={{ top: '80px' }}
         toastOptions={{
           duration: 3000,
           style: {

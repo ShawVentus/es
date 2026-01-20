@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Spinner } from '@librechat/client';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { Constants, EModelEndpoint } from 'librechat-data-provider';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
@@ -14,9 +14,14 @@ import useAuthRedirect from './useAuthRedirect';
 import temporaryStore from '~/store/temporary';
 import store from '~/store';
 
+// 默认 Agent ID
+const DEFAULT_AGENT_ID = 'agent_5wVXpMNgC3lgAZj1cUhmz';
+
 export default function ChatRoute() {
   const { data: startupConfig } = useGetStartupConfig();
   const { isAuthenticated, user, roles } = useAuthRedirect();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const defaultTemporaryChat = useRecoilValue(temporaryStore.defaultTemporaryChat);
   const setIsTemporary = useRecoilCallback(
@@ -33,6 +38,18 @@ export default function ChatRoute() {
   useIdChangeEffect(conversationId);
   const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
   const { newConversation } = useNewConvo();
+
+  // 当访问 /c/new 且没有 agent_id 参数时，自动添加默认 agent_id
+  useEffect(() => {
+    if (conversationId === Constants.NEW_CONVO && isAuthenticated) {
+      const hasAgentId = searchParams.has('agent_id');
+      if (!hasAgentId) {
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.set('agent_id', DEFAULT_AGENT_ID);
+        navigate(`/c/new?${newSearchParams.toString()}`, { replace: true });
+      }
+    }
+  }, [conversationId, searchParams, navigate, isAuthenticated]);
 
   const modelsQuery = useGetModelsQuery({
     enabled: isAuthenticated,

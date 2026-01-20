@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme, getThemeColors } from '../../hooks/useTheme';
-import Header from '../../components/common/Header';
-import { mockReportContent } from '../../mocks/reportContent';
+import { toast, Toaster } from 'react-hot-toast';
+import { useTheme, getThemeColors } from '../hooks/useTheme';
+import { useFinanceAuth } from '../hooks/useFinanceAuth';
+// mockReportContent 内联定义
+const mockReportContent = '# 模拟报告\n\n这是一个模拟报告内容，用于没有真实报告时的展示。\n\n## 模型概述\n\n- 模型类型: GARCH(1,1)\n- 数据来源: 上证指数';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { listReports, getReportDetails, type ReportMeta, getReportDownloadUrl, getCurrentUserId } from '../../api/reports';
+import { listReports, getReportDetails, type ReportMeta, getReportDownloadUrl } from '../api/reports';
 import { renderAsync } from 'docx-preview';
 
 interface ModelReport {
@@ -29,6 +31,7 @@ interface ModelReport {
 }
 
 export default function ReportAnalysis() {
+  const auth = useFinanceAuth();
   const { theme } = useTheme();
   const colors = getThemeColors(theme);
   const reportContentRef = useRef<HTMLDivElement>(null);
@@ -51,7 +54,7 @@ export default function ReportAnalysis() {
   useEffect(() => {
     const fetchReports = async () => {
       try {
-        const result = await listReports();
+        const result = await listReports(auth);
         if (result.success && result.reports.length > 0) {
           // Convert API response to ModelReport format
           const convertedReports: ModelReport[] = result.reports.map((r: ReportMeta) => ({
@@ -72,17 +75,14 @@ export default function ReportAnalysis() {
           setShowMockWarning(false); // Hide warning if we have real data
 
           // 自动选择最新报告（如果有 latestReportId）
-          const latestReportId = localStorage.getItem('latestReportId');
+          const latestReportId = localStorage.getItem('finance_latestReportId');
           if (latestReportId) {
             const targetReport = convertedReports.find(r => r.id === latestReportId);
             if (targetReport) {
               setSelectedReport(latestReportId);
             }
             // 无论是否找到都清理，避免重复尝试
-            localStorage.removeItem('latestReportId');
-          } else {
-            // 没有latestReportId时，自动选中第一个报告
-            setSelectedReport(convertedReports[0].id);
+            localStorage.removeItem('finance_latestReportId');
           }
         }
       } catch (error) {
@@ -155,7 +155,7 @@ export default function ReportAnalysis() {
       }
 
       try {
-        const details = await getReportDetails(selectedReport);
+        const details = await getReportDetails(auth, selectedReport);
         if (details.success && details.model_result) {
           // Update realReports with detailed metrics
           setRealReports(prev => prev.map(r => {
@@ -298,6 +298,7 @@ export default function ReportAnalysis() {
 
   // Use real reports if available, otherwise fall back to mock data
   const reports = realReports.length > 0 ? realReports : mockReports;
+  const hasMockData = realReports.length === 0;
 
   const filteredReports = reports.filter(report =>
     report.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -328,7 +329,7 @@ export default function ReportAnalysis() {
         const url = getReportDownloadUrl(currentReport.id);
         const response = await fetch(url, {
           headers: {
-            'X-User-Id': getCurrentUserId()
+            'X-User-Id': auth.user?.id || ''
           }
         });
 
@@ -450,14 +451,15 @@ export default function ReportAnalysis() {
   };
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-black' : `bg-gradient-to-br ${colors.gradient}`}`}>
+    <div className={`h-full flex flex-col ${theme === 'dark' ? 'bg-black' : `bg-gradient-to-br ${colors.gradient}`}`}>
+      <Toaster position="top-center" toastOptions={{ style: { marginTop: '80px' } }} />
       {/* Header */}
-      <Header />
+      {/* Header 已全局集成 */}
 
       {/* Mock Data Warning Banner */}
-      {showMockWarning && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
+      {showMockWarning && hasMockData && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 sticky top-0 z-40">
+          <div className="flex">
             <div className="flex items-center">
               <i className="ri-error-warning-line text-yellow-400 text-xl mr-3"></i>
               <p className="text-sm text-yellow-800">
@@ -475,7 +477,7 @@ export default function ReportAnalysis() {
       )}
 
       {/* Main Content */}
-      <div className={`flex ${showMockWarning ? 'h-[calc(100vh-73px-56px)]' : 'h-[calc(100vh-73px)]'}`}>
+      <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - Report List */}
         <div className={`w-80 ${theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white'} border-r-2 ${colors.borderColor} flex flex-col`}>
           <div className={`p-4 border-b-2 ${colors.borderColor}`}>
@@ -484,8 +486,8 @@ export default function ReportAnalysis() {
               <button
                 onClick={() => setShowBatchActions(!showBatchActions)}
                 className={`text-xs font-medium px-2 py-1 rounded ${showBatchActions
-                    ? getHighlightStyle()
-                    : theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? getHighlightStyle()
+                  : theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } cursor-pointer whitespace-nowrap`}
               >
                 {showBatchActions ? '取消' : '批量管理'}
@@ -536,8 +538,8 @@ export default function ReportAnalysis() {
                   key={report.id}
                   onClick={() => setSelectedReport(report.id)}
                   className={`p-4 rounded-lg cursor-pointer border-2 transition-all ${selectedReport === report.id
-                      ? `${colors.selectedBorder} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`
-                      : `${colors.borderColor} ${theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`
+                    ? `${colors.selectedBorder} ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`}`
+                    : `${colors.borderColor} ${theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`
                     }`}
                 >
                   <div className="flex items-start gap-3">
@@ -632,8 +634,8 @@ export default function ReportAnalysis() {
                   <button
                     onClick={() => setActiveTab('summary')}
                     className={`flex-1 h-10 px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'summary'
-                        ? theme === 'dark' ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-900 shadow-md'
-                        : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                      ? theme === 'dark' ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-900 shadow-md'
+                      : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     模型摘要
@@ -641,8 +643,8 @@ export default function ReportAnalysis() {
                   <button
                     onClick={() => setActiveTab('parameters')}
                     className={`flex-1 h-10 px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'parameters'
-                        ? theme === 'dark' ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-900 shadow-md'
-                        : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                      ? theme === 'dark' ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-900 shadow-md'
+                      : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     参数估计
@@ -650,8 +652,8 @@ export default function ReportAnalysis() {
                   <button
                     onClick={() => setActiveTab('diagnostics')}
                     className={`flex-1 h-10 px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${activeTab === 'diagnostics'
-                        ? theme === 'dark' ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-900 shadow-md'
-                        : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                      ? theme === 'dark' ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-900 shadow-md'
+                      : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     模型诊断
@@ -672,8 +674,8 @@ export default function ReportAnalysis() {
                           <button
                             onClick={() => setIsEditing(!isEditing)}
                             className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 whitespace-nowrap cursor-pointer ${isEditing
-                                ? getHighlightStyle()
-                                : theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              ? getHighlightStyle()
+                              : theme === 'dark' ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                               }`}
                           >
                             <i className={`ri-${isEditing ? 'save' : 'edit'}-line text-lg`}></i>
@@ -808,12 +810,12 @@ export default function ReportAnalysis() {
                                 <th className={`px-6 py-2 text-left text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>参数</th>
                                 <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>估计值</th>
                                 {currentReport.modelResult?.parameters?.p_values &&
-                                 Object.values(currentReport.modelResult.parameters.p_values).some(p => p !== null) && (
-                                  <>
-                                    <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>p值</th>
-                                    <th className={`px-6 py-2 text-center text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>显著性</th>
-                                  </>
-                                )}
+                                  Object.values(currentReport.modelResult.parameters.p_values).some(p => p !== null) && (
+                                    <>
+                                      <th className={`px-6 py-2 text-right text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>p值</th>
+                                      <th className={`px-6 py-2 text-center text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} uppercase tracking-wider whitespace-nowrap`}>显著性</th>
+                                    </>
+                                  )}
                               </tr>
                             </thead>
                             <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-800' : 'divide-gray-200'}`}>
@@ -883,7 +885,7 @@ export default function ReportAnalysis() {
                         <div className={`px-6 py-3 ${theme === 'dark' ? 'bg-gray-800' : `bg-${colors.primaryLight}`} border-t-2 ${colors.borderColor}`}>
                           <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                             {currentReport.modelResult?.parameters?.p_values &&
-                             Object.values(currentReport.modelResult.parameters.p_values).some(p => p !== null)
+                              Object.values(currentReport.modelResult.parameters.p_values).some(p => p !== null)
                               ? '注：*** p<0.01, ** p<0.05, * p<0.1'
                               : currentReport.modelResult?.note || '注：当前模型库不提供参数p值'}
                           </p>

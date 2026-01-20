@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>验证 Toast 被遮挡问题</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div class="sticky top-0 z-50 flex flex-col" id="header">
+    <div class="bg-amber-50 border-b border-amber-200 px-4 py-2">
+      <div class="max-w-7xl mx-auto text-sm text-amber-800">
+        <span>您尚未登录</span>
+      </div>
+    </div>
+    <header class="bg-white border-gray-200 border-b shadow-sm">
+      <div class="px-6 py-4">
+        <span class="text-xl font-semibold">金融时序研究平台</span>
+      </div>
+    </header>
+  </div>
+
+  <div id="toast-9999" style="position: fixed; top: 0; right: 16px; z-index: 9999; padding: 8px;">
+    <div style="background: #333; color: #fff; padding: 12px 20px; border-radius: 8px;">
+      Toast z-index:9999
+    </div>
+  </div>
+
+  <div style="padding: 20px; height: 2000px;">
+    <h2>向下滚动测试</h2>
+    <button onclick="showInfo()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border-radius: 4px; cursor: pointer;">
+      测量 Header 高度
+    </button>
+    <div id="info" style="margin-top: 20px;"></div>
+  </div>
+
+  <script>
+    function showInfo() {
+      const header = document.getElementById('header');
+      const toast = document.getElementById('toast-9999');
+      const headerHeight = header.offsetHeight;
+      const headerZ = window.getComputedStyle(header).zIndex;
+      const toastZ = window.getComputedStyle(toast).zIndex;
+
+      document.getElementById('info').innerHTML =
+        'Header高度: ' + headerHeight + 'px<br>' +
+        'Header z-index: ' + headerZ + '<br>' +
+        'Toast z-index: ' + toastZ + '<br>' +
+        'Toast top: ' + toast.style.top + '<br><br>' +
+        (parseInt(toastZ) > parseInt(headerZ) ?
+          '<span style="color:green">✓ z-index正常</span>' :
+          '<span style="color:red">✗ z-index异常</span>');
+    }
+  </script>
+</body>
+</html>

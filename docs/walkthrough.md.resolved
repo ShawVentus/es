@@ -1,0 +1,71 @@
+# 前端整合 - 阶段1完成总结
+
+## 已完成工作
+
+### 1. 基础架构
+- ✅ 配置 Vite proxy（4条规则指向 stock-mcp 9898）
+- ✅ 创建 `components/Finance/` 目录结构
+- ✅ 复制 `logo.png` 到 public 目录
+
+### 2. 代码迁移
+
+| 模块 | 文件 | 状态 |
+|------|------|------|
+| Store | [themeStore.ts](file:///root/frontend/src/store/themeStore.ts), [filesStore.ts](file:///root/frontend/src/store/filesStore.ts) | ✅ |
+| Hooks | [useTheme.ts](file:///root/frontend/src/hooks/useTheme.ts), [useFinanceAuth.ts](file:///root/LibreChat/client/src/components/Finance/hooks/useFinanceAuth.ts), [useDatasets.ts](file:///root/frontend/src/hooks/useDatasets.ts) | ✅ |
+| API | [dataset.ts](file:///root/frontend/src/api/dataset.ts), [models.ts](file:///root/frontend/src/api/models.ts), [reports.ts](file:///root/frontend/src/api/reports.ts), [statistics.ts](file:///root/frontend/src/api/statistics.ts) | ✅ |
+| 组件 | [Header.tsx](file:///root/frontend/src/components/common/Header.tsx), [ThemeSelector.tsx](file:///root/frontend/src/components/feature/ThemeSelector.tsx) | ✅ |
+| 页面 | [Home.tsx](file:///root/LibreChat/client/src/components/Finance/pages/Home.tsx), 其他（占位） | ✅ |
+
+### 3. 路由配置
+- ✅ 修改 [Root.tsx](file:///root/LibreChat/client/src/routes/Root.tsx) 包裹 Finance Header
+- ✅ 根路径 `/` 改为金融首页
+- ✅ 添加 `/my-data`、`/model-building`、`/report-analysis` 路由
+
+### 4. 编译验证
+- ✅ TypeScript 编译通过（Exit code 0）
+
+---
+
+## 文件清单
+
+```
+LibreChat/client/src/components/Finance/
+├── Header.tsx                    # 金融平台顶部导航栏
+├── api/
+│   ├── dataset.ts               # 数据集 API
+│   ├── models.ts                # 模型 API
+│   ├── reports.ts               # 报告 API
+│   └── statistics.ts            # 统计 API
+├── components/
+│   └── ThemeSelector.tsx        # 主题选择器
+├── hooks/
+│   ├── useDatasets.ts           # 数据集管理 Hook
+│   ├── useFinanceAuth.ts        # 认证 Hook
+│   └── useTheme.ts              # 主题 Hook
+├── pages/
+│   ├── Home.tsx                 # 首页
+│   └── index.tsx                # 页面索引（含占位）
+└── store/
+    ├── filesStore.ts            # 数据集状态
+    └── themeStore.ts            # 主题状态
+```
+
+---
+
+## 下一步
+
+1. **启动服务测试**：`npm run frontend:dev`
+2. **迁移剩余页面**：MyData、ModelBuilding、ReportAnalysis
+3. **添加 Nav.tsx 入口**：侧边栏金融模块链接
+
+---
+
+## 代码审查修复（2026-01-18）
+
+| 问题 | 修复 |
+|------|------|
+| file-saver 依赖未安装 | 改用原生 Blob URL 方法下载文件 |
+| ThemeSelector 未集成 | 已添加到 Header 组件 |
+
+✅ TypeScript 编译通过（Exit code: 0）

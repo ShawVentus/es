@@ -116,7 +116,7 @@ export default function AgentIframe() {
             {/* 核心 iframe */}
             <iframe
                 ref={iframeRef}
-                src={agentUrl}
+                src={agentUrl?.startsWith('http') ? agentUrl : `${window.location.origin}${agentUrl}`}
                 className="w-full h-full border-none"
                 title="Agent"
                 allow="clipboard-read; clipboard-write; microphone"

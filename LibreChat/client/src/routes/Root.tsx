@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useMediaQuery } from '@librechat/client';
 import type { ContextType } from '~/common';
 import {
@@ -21,6 +21,7 @@ import { Nav, MobileNav, NAV_WIDTH } from '~/components/Nav';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
+import FinanceHeader, { FINANCE_HEADER_HEIGHT } from '~/components/Finance/Header';
 
 export default function Root() {
   const [showTerms, setShowTerms] = useState(false);
@@ -32,6 +33,10 @@ export default function Root() {
 
   const { isAuthenticated, logout } = useAuthContext();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
+  const location = useLocation();
+
+  // 只在聊天相关页面显示侧边栏
+  const showSidebar = location.pathname.startsWith('/c') || location.pathname === '/search' || location.pathname.startsWith('/agents');
 
   // Global health check - runs once per authenticated session
   useHealthCheck(isAuthenticated);
@@ -73,23 +78,26 @@ export default function Root() {
           <AgentsMapContext.Provider value={agentsMap}>
             <PromptGroupsProvider>
               <Banner onHeightChange={setBannerHeight} />
-              <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
+              {/* Finance Header - 金融平台顶部导航栏 */}
+              <FinanceHeader />
+              <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight + FINANCE_HEADER_HEIGHT}px)` }}>
                 <div className="relative z-0 flex h-full w-full overflow-hidden">
-                  <Nav navVisible={navVisible} setNavVisible={setNavVisible} />
+                  {/* 只在聊天页面显示侧边栏 */}
+                  {showSidebar && <Nav navVisible={navVisible} setNavVisible={setNavVisible} />}
                   <div
                     className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden"
                     style={
-                      isSmallScreen
+                      isSmallScreen && showSidebar
                         ? {
-                            transform: navVisible
-                              ? `translateX(${NAV_WIDTH.MOBILE}px)`
-                              : 'translateX(0)',
-                            transition: 'transform 0.2s ease-out',
-                          }
+                          transform: navVisible
+                            ? `translateX(${NAV_WIDTH.MOBILE}px)`
+                            : 'translateX(0)',
+                          transition: 'transform 0.2s ease-out',
+                        }
                         : undefined
                     }
                   >
-                    <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />
+                    {showSidebar && <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />}
                     <Outlet context={{ navVisible, setNavVisible } satisfies ContextType} />
                   </div>
                 </div>

@@ -12,13 +12,32 @@ const backendPort = process.env.BACKEND_PORT && Number(process.env.BACKEND_PORT)
 const backendURL = process.env.HOST ? `http://${process.env.HOST}:${backendPort}` : `http://localhost:${backendPort}`;
 
 export default defineConfig(({ command }) => ({
-  base: '',
+  base: '/librechat/',
   server: {
     allowedHosts: process.env.VITE_ALLOWED_HOSTS && process.env.VITE_ALLOWED_HOSTS.split(',') || [],
     host: process.env.HOST || 'localhost',
     port: process.env.PORT && Number(process.env.PORT) || 3090,
     strictPort: false,
     proxy: {
+      // === stock-mcp API 代理 (9898) - 优先匹配 ===
+      // 注意: /api/models 属于 LibreChat，不要代理到 9898
+      '/api/v1': {
+        target: 'http://localhost:9898',
+        changeOrigin: true,
+      },
+      '/api/reports': {
+        target: 'http://localhost:9898',
+        changeOrigin: true,
+      },
+      '/api/statistics': {
+        target: 'http://localhost:9898',
+        changeOrigin: true,
+      },
+      '/api/models': {
+        target: 'http://localhost:9898',
+        changeOrigin: true,
+      },
+      // === LibreChat API 代理 (3080) - 兜底 ===
       '/api': {
         target: backendURL,
         changeOrigin: true,
@@ -35,68 +54,70 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     nodePolyfills(),
-    VitePWA({
-      injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
-      registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
-      devOptions: {
-        enabled: false, // disable service worker registration in development mode
-      },
-      useCredentials: true,
-      includeManifestIcons: false,
-      workbox: {
-        globPatterns: [
-          '**/*.{js,css,html}',
-          'assets/favicon*.png',
-          'assets/icon-*.png',
-          'assets/apple-touch-icon*.png',
-          'assets/maskable-icon.png',
-          'manifest.webmanifest',
-        ],
-        globIgnores: ['images/**/*', '**/*.map', 'index.html'],
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/oauth/, /^\/api/],
-      },
-      includeAssets: [],
-      manifest: {
-        name: 'LibreChat',
-        short_name: 'LibreChat',
-        display: 'standalone',
-        background_color: '#000000',
-        theme_color: '#009688',
-        icons: [
-          {
-            src: 'assets/favicon-32x32.png',
-            sizes: '32x32',
-            type: 'image/png',
-          },
-          {
-            src: 'assets/favicon-16x16.png',
-            sizes: '16x16',
-            type: 'image/png',
-          },
-          {
-            src: 'assets/apple-touch-icon-180x180.png',
-            sizes: '180x180',
-            type: 'image/png',
-          },
-          {
-            src: 'assets/icon-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'assets/maskable-icon.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-    }),
+    // VitePWA - 已禁用，避免Service Worker缓存问题
+    // VitePWA({
+    //   injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
+    //   registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
+    //   devOptions: {
+    //     enabled: false, // disable service worker registration in development mode
+    //   },
+    //   useCredentials: true,
+    //   includeManifestIcons: false,
+    //   workbox: {
+    //     navigateFallback: null,
+    //     globPatterns: [
+    //       '**/*.{js,css,html}',
+    //       'assets/favicon*.png',
+    //       'assets/icon-*.png',
+    //       'assets/apple-touch-icon*.png',
+    //       'assets/maskable-icon.png',
+    //       'manifest.webmanifest',
+    //     ],
+    //     globIgnores: ['images/**/*', '**/*.map', 'index.html'],
+    //     maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+    //     navigateFallbackDenylist: [/^\/oauth/, /^\/api/],
+    //   },
+    //   includeAssets: [],
+    //   manifest: {
+    //     name: 'LibreChat',
+    //     short_name: 'LibreChat',
+    //     display: 'standalone',
+    //     background_color: '#000000',
+    //     theme_color: '#009688',
+    //     icons: [
+    //       {
+    //         src: 'assets/favicon-32x32.png',
+    //         sizes: '32x32',
+    //         type: 'image/png',
+    //       },
+    //       {
+    //         src: 'assets/favicon-16x16.png',
+    //         sizes: '16x16',
+    //         type: 'image/png',
+    //       },
+    //       {
+    //         src: 'assets/apple-touch-icon-180x180.png',
+    //         sizes: '180x180',
+    //         type: 'image/png',
+    //       },
+    //       {
+    //         src: 'assets/icon-192x192.png',
+    //         sizes: '192x192',
+    //         type: 'image/png',
+    //       },
+    //       {
+    //         src: 'assets/maskable-icon.png',
+    //         sizes: '512x512',
+    //         type: 'image/png',
+    //         purpose: 'maskable',
+    //       },
+    //     ],
+    //   },
+    // }),
     sourcemapExclude({ excludeNodeModules: true }),
-    compression({
-      threshold: 10240,
-    }),
+    // compression({  // 临时禁用压缩避免解码错误
+    //   threshold: 10240,
+    // }),
   ],
   publicDir: command === 'serve' ? './public' : false,
   build: {

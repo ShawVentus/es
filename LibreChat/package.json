@@ -160,5 +160,8 @@
       "admin/",
       "packages/"
     ]
+  },
+  "dependencies": {
+    "http-proxy-middleware": "^3.0.5"
   }
 }
