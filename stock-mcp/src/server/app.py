@@ -26,59 +26,95 @@ from src.server.utils.logger import logger
 from src.server.utils.request_context import set_current_user_id, clear_current_user_id, get_current_user_id
 from src.server.utils.user_id_resolver import get_user_id_resolver
 
+# 全局MCP服务器实例（供API路由使用）
+_global_mcp_server = None
+
+def get_global_mcp_server():
+    """获取全局MCP服务器实例"""
+    return _global_mcp_server
+
+# 全局玻尔认证服务实例（供中间件使用）
+import threading
+_global_bohrium_auth = None
+_auth_lock = threading.Lock()
+
+def get_global_bohrium_auth():
+    """获取全局玻尔认证服务实例（线程安全）"""
+    global _global_bohrium_auth
+    if _global_bohrium_auth is None:
+        with _auth_lock:
+            # 双重检查锁定（避免竞态条件）
+            if _global_bohrium_auth is None:
+                from src.server.domain.services.bohrium_auth_service import BohriumAuthService
+                _global_bohrium_auth = BohriumAuthService()
+    return _global_bohrium_auth
+
 
 class UserIdMiddleware(BaseHTTPMiddleware):
     """
-    X-User-Id 请求头提取中间件
-    
+    用户认证中间件（支持多种认证方式）
+
+    认证优先级：
+    1. X-User-Id请求头（LibreChat代理方式）
+    2. Cookie认证（appAccessKey + clientName → 调用玻尔API）
+
     说明：
-    - 从HTTP请求头中提取 X-User-Id
-    - 存储到请求上下文变量中
+    - 提取用户ID并存储到请求上下文变量中
     - 使MCP工具可以访问当前用户ID进行文件存储隔离
     """
-    async def dispatch(self, request: Request, call_next):
-        # 1. 从请求头提取X-User-Id (可能是ObjectId或邮箱)
-        user_id_from_header = request.headers.get('X-User-Id')
-        
-        # 2. 从Authorization header提取JWT token
-        auth_header = request.headers.get('Authorization')
-        
-        # 🔍 调试：输出所有请求头
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] 请求路径: {request.url.path}")
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] X-User-Id: {user_id_from_header}")
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] Authorization: {'Bearer ...' if auth_header else 'None'}")
-        
-        # 3. 尝试从JWT提取邮箱并注册映射（用于日志和其他用途）
-        resolved_email = None
-        if auth_header and user_id_from_header:
-            # 提取Bearer token
-            if auth_header.startswith('Bearer '):
-                jwt_token = auth_header[7:]  # 移除 "Bearer " 前缀
 
-                # 使用resolver解析JWT
+    async def dispatch(self, request: Request, call_next):
+        # 🔍 调试：输出请求信息
+        logger.info(f"[UserIdMiddleware] Request: {request.method} {request.url.path}")
+
+        final_user_id = None
+
+        # 方式1：从请求头提取X-User-Id（LibreChat代理方式）
+        user_id_from_header = request.headers.get('X-User-Id')
+
+        if user_id_from_header:
+            final_user_id = user_id_from_header
+            logger.info(f"[UserIdMiddleware] ✅ Using X-User-Id from header: {final_user_id}")
+
+            # 尝试从JWT提取邮箱（保留原有逻辑）
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                jwt_token = auth_header[7:]
                 resolver = get_user_id_resolver()
                 resolved_email = resolver.register_from_jwt(user_id_from_header, jwt_token)
+                if resolved_email:
+                    logger.info(f"[UserIdMiddleware] Resolved email: {resolved_email}")
 
-        # 4. 确定最终使用的用户ID（统一使用 ObjectId，而非邮箱）
-        # 原因：ObjectId 更稳定，不含特殊字符，适合作为目录名
-        final_user_id = user_id_from_header
+        # 方式2：从Cookie提取认证信息（新增：玻尔认证）
+        else:
+            app_access_key = request.cookies.get('appAccessKey')
+            client_name = request.cookies.get('clientName')
 
+            logger.debug(f"[UserIdMiddleware] Cookie auth attempt - appAccessKey: {bool(app_access_key)}, clientName: {client_name}")
+
+            if app_access_key and client_name:
+                # 使用全局单例认证服务（保持缓存）
+                bohrium_auth = get_global_bohrium_auth()
+                final_user_id = await bohrium_auth.authenticate(app_access_key, client_name)
+
+                if final_user_id:
+                    logger.info(f"[UserIdMiddleware] ✅ Cookie authentication successful, userid: {final_user_id}")
+                else:
+                    logger.warning(f"[UserIdMiddleware] ⚠️ Cookie authentication failed")
+            else:
+                logger.debug(f"[UserIdMiddleware] No cookie credentials found")
+
+        # 设置用户ID到上下文
         if final_user_id:
             set_current_user_id(final_user_id)
 
-            # 🔍 验证：立即读取确认是否设置成功
+            # 🔍 验证：立即读取确认
             verify_read = get_current_user_id()
-            logger.error(f"[验证-主中间件] set后立即读取: {repr(verify_read)}, 原值: {repr(final_user_id)}, 匹配: {verify_read == final_user_id}")
-
-            if resolved_email:
-                logger.info(f"[UserIdMiddleware] ✅ 使用 ObjectId: {final_user_id} (邮箱: {resolved_email})")
-            else:
-                logger.info(f"[UserIdMiddleware] ✅ 使用用户ID: {final_user_id}")
+            logger.debug(f"[UserIdMiddleware] Context verification - set: {final_user_id}, read: {verify_read}, match: {verify_read == final_user_id}")
         else:
-            logger.warning(f"[UserIdMiddleware] ⚠️ 未找到X-User-Id请求头！")
-        
-        # contextvars会自动管理生命周期，无需手动清除
-        # 这确保异步执行的MCP工具能够正确获取用户ID
+            logger.warning(f"[UserIdMiddleware] ⚠️ No valid authentication found")
+
+        # 继续处理请求（contextvars会自动管理生命周期）
         response = await call_next(request)
         return response
 
@@ -91,10 +127,12 @@ def create_app():
     """
 
     # 1. Create MCP server instance early so we can integrate its lifespan
+    global _global_mcp_server
     mcp_server = None
     mcp_app = None
     try:
         mcp_server = create_mcp_server()
+        _global_mcp_server = mcp_server  # 保存到全局变量
         mcp_app = mcp_server.streamable_http_app(path="/")
 
         # 为 MCP 子应用添加 user_id 注入中间件（解决 app.mount 导致的 contextvars 丢失问题）
@@ -279,7 +317,11 @@ def create_app():
     # 4. Add CORS middleware (允许跨域请求)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # 生产环境应限制具体域名
+        allow_origins=[
+            "http://localhost:50001",  # 生产模式前端
+            "http://localhost:3001",   # 开发模式前端
+            "http://0.0.0.0:50001",    # 兼容 0.0.0.0 绑定
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -317,6 +359,14 @@ def create_app():
     from src.server.api.routes.reports import router as reports_router
     app.include_router(reports_router, tags=["Reports"])
 
+    # 5.6 Register MCP Gateway API router (MCP工具调用网关)
+    from src.server.api.routes.mcp_gateway import router as mcp_gateway_router
+    app.include_router(mcp_gateway_router, tags=["MCP Gateway"])
+
+    # 5.7 Register Auth API router (认证接口)
+    from src.server.api.routes.auth import router as auth_router
+    app.include_router(auth_router, tags=["Authentication"])
+
     logger.info("✅ RESTful API routes registered")
     logger.info("   - Health check: /health")
     logger.info("   - Market data: /api/v1/market/*")
@@ -326,6 +376,8 @@ def create_app():
     logger.info("   - Statistics: /api/statistics/*")
     logger.info("   - Models: /api/models/*")
     logger.info("   - Reports: /api/reports/*")
+    logger.info("   - MCP Gateway: /api/v1/tools, /api/v1/mcp/call")
+    logger.info("   - Authentication: /api/v1/auth/current-user")
 
     # 6. Mount MCP protocol endpoint
     if mcp_app:

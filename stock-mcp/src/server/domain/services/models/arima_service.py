@@ -237,7 +237,7 @@ class ARIMAService:
             params = result.params
             pvalues = result.pvalues
             param_names = result.param_names if hasattr(result, 'param_names') else [f'param_{i}' for i in range(len(params))]
-            
+
             coefficients = {}
             p_values = {}
             for i, name in enumerate(param_names):
@@ -245,7 +245,18 @@ class ARIMAService:
                 pval = pvalues[i] if isinstance(pvalues, np.ndarray) else pvalues.iloc[i]
                 coefficients[name] = float(val) if not np.isnan(val) else None
                 p_values[name] = float(pval) if not np.isnan(pval) else None
-            
+
+            # 提取标准误和t统计量
+            bse = result.bse
+            tvalues = result.tvalues
+            standard_errors = {}
+            t_statistics = {}
+            for i, name in enumerate(param_names):
+                se_val = bse[i] if isinstance(bse, np.ndarray) else bse.iloc[i]
+                t_val = tvalues[i] if isinstance(tvalues, np.ndarray) else tvalues.iloc[i]
+                standard_errors[name] = float(se_val) if not np.isnan(se_val) else None
+                t_statistics[name] = float(t_val) if not np.isnan(t_val) else None
+
             # 计算R²
             valid_mask = [f is not None for f in full_fitted]
             y_valid = np.array([y_values[i] for i in range(n_orig) if valid_mask[i]])

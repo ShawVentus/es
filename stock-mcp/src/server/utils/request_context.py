@@ -87,37 +87,45 @@ def clear_current_user_id() -> None:
 
 def get_user_id_from_mcp_request() -> Optional[str]:
     """
-    从 FastMCP 的 HTTP Request 中获取用户ID
+    从 FastMCP 的 HTTP Request 中获取用户ID（增强版）
 
     说明：
-    - 使用 FastMCP 官方 API: fastmcp.server.dependencies.get_http_request()
-    - 该 API 会自动处理两种情况：
-      1. 从 MCP SDK 的 request_ctx 获取（工具执行阶段）
-      2. Fallback 到 FastMCP 的 _current_http_request（中间件阶段）
-    - 相比 get_current_user_id()，这个方法更可靠（直接从 Request 对象读取）
+    - 优先从 FastMCP 的 request 对象获取（MCP协议调用）
+    - Fallback 到 contextvars（REST API调用）
+    - 双重检查确保兼容性
 
     Returns:
-        用户ID字符串（从 X-User-Id header 提取），如果未找到则返回 None
+        用户ID字符串，如果未找到则返回 None
 
     使用场景：
-        推荐在所有 MCP 工具中使用此方法替代 get_current_user_id()
+        推荐在所有 MCP 工具中使用此方法
 
     参考文档：
         https://gofastmcp.com/servers/context#http-requests
     """
+    # 方式1：从 FastMCP 的 request 对象获取（MCP协议调用）
     try:
-        # 使用 FastMCP 官方 API 获取当前 HTTP Request
         from fastmcp.server.dependencies import get_http_request
 
         request = get_http_request()
-
-        # 从 Request headers 提取 X-User-Id
         user_id = request.headers.get('X-User-Id')
-        return user_id
+        if user_id:
+            return user_id
     except RuntimeError:
         # get_http_request() 会在没有活动请求时抛出 RuntimeError
-        return None
+        pass
     except Exception:
-        # 捕获其他异常，避免工具崩溃
-        return None
+        # 捕获其他异常
+        pass
+
+    # 方式2：从 contextvars 获取（REST API调用 + cookie认证）
+    try:
+        user_id = get_current_user_id()
+        if user_id:
+            return user_id
+    except Exception:
+        pass
+
+    # 都失败，返回None
+    return None
 
