@@ -75,29 +75,63 @@ class CCXTAdapter(BaseDataAdapter):
     def get_capabilities(self) -> List[AdapterCapability]:
         """Declare CCXT adapter's capabilities."""
         return [
-            AdapterCapability(asset_type=AssetType.CRYPTO, exchanges={Exchange.CRYPTO}),
+            AdapterCapability(
+                asset_type=AssetType.CRYPTO,
+                exchanges={
+                    Exchange.CRYPTO,
+                    Exchange.BINANCE,
+                    Exchange.OKX,
+                    Exchange.COINBASE,
+                    Exchange.KRAKEN,
+                },
+            ),
         ]
 
+    def _exchange_id_for_ticker(self, internal_ticker: str) -> str:
+        """Map internal exchange prefixes to CCXT exchange ids."""
+        if ":" not in internal_ticker:
+            return self.default_exchange_id
+
+        exchange = internal_ticker.split(":", 1)[0].upper()
+        return {
+            "BINANCE": "binance",
+            "OKX": "okx",
+            "COINBASE": "coinbase",
+            "KRAKEN": "kraken",
+            "CRYPTO": self.default_exchange_id,
+        }.get(exchange, self.default_exchange_id)
+
     def convert_to_source_ticker(self, internal_ticker: str) -> str:
-        """Convert CRYPTO:BTC-USD to BTC/USDT (defaulting to USDT for USD)."""
-        # Format: CRYPTO:BTC-USD -> BTC/USDT
+        """Convert internal crypto tickers to CCXT pair format.
+
+        Supported examples:
+        - CRYPTO:BTC -> BTC/USDT
+        - CRYPTO:BTC-USD -> BTC/USDT
+        - BINANCE:BTCUSDT -> BTC/USDT
+        - BINANCE:ETH/USDT -> ETH/USDT
+        """
         if ":" in internal_ticker:
-            symbol_part = internal_ticker.split(":")[1]
+            symbol_part = internal_ticker.split(":", 1)[1]
         else:
             symbol_part = internal_ticker
 
-        # Replace - with /
-        symbol = symbol_part.replace("-", "/")
-        
-        # If it's just BTC, assume BTC/USDT
-        if "/" not in symbol:
-            symbol = f"{symbol}/USDT"
-            
-        # Handle USD vs USDT mapping if needed
-        if symbol.endswith("/USD"):
-             symbol = symbol.replace("/USD", "/USDT")
-             
-        return symbol.upper()
+        symbol = symbol_part.upper().replace("-", "/")
+        if "/" in symbol:
+            base, quote = symbol.split("/", 1)
+            if quote == "USD":
+                quote = "USDT"
+            return f"{base}/{quote}"
+
+        # Split common concatenated pairs such as BTCUSDT, ETHUSDC, BTCUSD.
+        for quote in ("USDT", "USDC", "USD", "BTC", "ETH"):
+            if symbol.endswith(quote) and len(symbol) > len(quote):
+                base = symbol[: -len(quote)]
+                if quote == "USD":
+                    quote = "USDT"
+                return f"{base}/{quote}"
+
+        # If it is just BTC/ETH/etc., assume the default spot quote.
+        return f"{symbol}/USDT"
 
     def convert_to_internal_ticker(
         self, source_ticker: str, default_exchange: Optional[str] = None
@@ -114,7 +148,7 @@ class CCXTAdapter(BaseDataAdapter):
         # We rely on CryptoAdapter (CoinGecko) for that.
         # This implementation returns basic market info.
         
-        exchange = await self._get_exchange(self.default_exchange_id)
+        exchange = await self._get_exchange(self._exchange_id_for_ticker(ticker))
         symbol = self.convert_to_source_ticker(ticker)
         
         if symbol not in exchange.markets:
@@ -147,7 +181,7 @@ class CCXTAdapter(BaseDataAdapter):
         if cached:
             return AssetPrice.from_dict(cached)
 
-        exchange = await self._get_exchange(self.default_exchange_id)
+        exchange = await self._get_exchange(self._exchange_id_for_ticker(ticker))
         symbol = self.convert_to_source_ticker(ticker)
 
         try:
@@ -203,7 +237,7 @@ class CCXTAdapter(BaseDataAdapter):
         if cached:
             return [AssetPrice.from_dict(item) for item in cached]
 
-        exchange = await self._get_exchange(self.default_exchange_id)
+        exchange = await self._get_exchange(self._exchange_id_for_ticker(ticker))
         symbol = self.convert_to_source_ticker(ticker)
 
         try:

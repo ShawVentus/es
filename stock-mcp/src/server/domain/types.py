@@ -34,6 +34,10 @@ class Exchange(str, Enum):
     BSE = "BSE"  # Beijing Stock Exchange
     HKEX = "HKEX"  # Hong Kong Stock Exchange
     CRYPTO = "CRYPTO"
+    BINANCE = "BINANCE"
+    OKX = "OKX"
+    COINBASE = "COINBASE"
+    KRAKEN = "KRAKEN"
 
 
 class MarketStatus(str, Enum):

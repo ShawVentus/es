@@ -1,12 +1,21 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { resolveFrameTargetOrigin, safePostMessageToFrame } from '../../utils/iframeMessaging';
 
 // 调试日志
 const log = (message: string) => {
     if (import.meta.env.VITE_DEBUG_MODE === 'true') {
         console.log(`[AgentIframe] ${message}`);
     }
+};
+
+const DEFAULT_AGENT_URL = '/librechat/';
+const AUTH_STATUS_QUERY = { type: 'QUERY_AUTH_STATUS' } as const;
+
+const logFrameMessage = (message: string, error?: unknown) => {
+    const suffix = error instanceof Error ? `: ${error.message}` : error ? `: ${String(error)}` : '';
+    log(`${message}${suffix}`);
 };
 
 /**
@@ -20,6 +29,7 @@ const log = (message: string) => {
  */
 export default function AgentIframe() {
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const authRetryTimerRef = useRef<number | null>(null);
     const location = useLocation();
 
     // 状态管理
@@ -29,7 +39,31 @@ export default function AgentIframe() {
 
     // 路由判断
     const isVisible = location.pathname === '/data-acquisition';
-    const agentUrl = import.meta.env.VITE_AGENT_URL;
+    const agentUrl = import.meta.env.VITE_AGENT_URL?.trim() || DEFAULT_AGENT_URL;
+    const agentOrigin = resolveFrameTargetOrigin(agentUrl);
+
+    const clearAuthRetryTimer = () => {
+        if (authRetryTimerRef.current !== null) {
+            window.clearTimeout(authRetryTimerRef.current);
+            authRetryTimerRef.current = null;
+        }
+    };
+
+    const queryAuthStatus = (retriesRemaining = 0) => {
+        const sent = safePostMessageToFrame(
+            iframeRef.current,
+            AUTH_STATUS_QUERY,
+            agentOrigin,
+            logFrameMessage,
+        );
+
+        if (!sent && retriesRemaining > 0) {
+            clearAuthRetryTimer();
+            authRetryTimerRef.current = window.setTimeout(() => {
+                queryAuthStatus(retriesRemaining - 1);
+            }, 500);
+        }
+    };
 
     // 1. iframe onLoad 事件处理
     const handleIframeLoad = () => {
@@ -38,15 +72,10 @@ export default function AgentIframe() {
         setHasError(false);
         setHasLoaded(true);
 
-        // 延迟查询一次状态，确保 Agent 内部初始化完毕
-        setTimeout(() => {
-            // 注意：这里使用 postMessage 进行初始握手
-            if (iframeRef.current && agentUrl) {
-                iframeRef.current.contentWindow?.postMessage(
-                    { type: 'QUERY_AUTH_STATUS' },
-                    window.location.origin
-                );
-            }
+        // 延迟查询一次状态，确保 Agent 内部初始化完毕；若 iframe 仍是 about:blank，有限重试。
+        clearAuthRetryTimer();
+        authRetryTimerRef.current = window.setTimeout(() => {
+            queryAuthStatus(3);
         }, 500);
     };
 
@@ -59,14 +88,17 @@ export default function AgentIframe() {
 
     // 3. 可见性变化副作用：每次切回来时，重新查询状态
     useEffect(() => {
-        if (isVisible && hasLoaded && iframeRef.current && agentUrl) {
+        if (isVisible && hasLoaded && iframeRef.current) {
             log('Visibility changed to true, syncing state...');
-            iframeRef.current.contentWindow?.postMessage(
-                { type: 'QUERY_AUTH_STATUS' },
-                window.location.origin
-            );
+            queryAuthStatus(2);
         }
-    }, [isVisible, hasLoaded, agentUrl]);
+    }, [isVisible, hasLoaded, agentOrigin]);
+
+    useEffect(() => {
+        return () => {
+            clearAuthRetryTimer();
+        };
+    }, []);
 
     return (
         <div

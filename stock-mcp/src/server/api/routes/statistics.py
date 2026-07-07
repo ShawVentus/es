@@ -13,6 +13,7 @@ from src.server.domain.services.statistical_tests_service import StatisticalTest
 from src.server.domain.services.multivariate_tests_service import MultivariateTestsService
 from src.server.utils.request_context import get_current_user_id
 from src.server.utils.logger import logger
+from src.server.utils.storage_paths import STORAGE_ROOT_STR
 
 router = APIRouter(prefix="/api/statistics", tags=["statistics"])
 
@@ -178,7 +179,7 @@ def save_test_results(user_id: str, test_type: str, results: dict) -> str:
     Returns:
         保存的文件路径
     """
-    models_dir = f"/root/librechat_user_data/{user_id}/models"
+    models_dir = f"{STORAGE_ROOT_STR}/{user_id}/models"
     os.makedirs(models_dir, exist_ok=True)
 
     filename = f"test_results_{test_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -218,9 +219,9 @@ async def run_univariate_tests(request: UnivariateTestRequest):
         user_id = get_current_user_id() or "anonymous"
 
         # 尝试从processed目录读取，若不存在则从dataset读取
-        file_path = f"/root/librechat_user_data/{user_id}/processed/{request.filename}"
+        file_path = f"{STORAGE_ROOT_STR}/{user_id}/processed/{request.filename}"
         if not os.path.exists(file_path):
-            file_path = f"/root/librechat_user_data/{user_id}/dataset/{request.filename}"
+            file_path = f"{STORAGE_ROOT_STR}/{user_id}/dataset/{request.filename}"
 
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"文件不存在: {request.filename}")
@@ -289,9 +290,9 @@ async def run_multivariate_tests(request: MultivariateTestRequest):
         names = []
 
         for filename in request.filenames:
-            file_path = f"/root/librechat_user_data/{user_id}/processed/{filename}"
+            file_path = f"{STORAGE_ROOT_STR}/{user_id}/processed/{filename}"
             if not os.path.exists(file_path):
-                file_path = f"/root/librechat_user_data/{user_id}/dataset/{filename}"
+                file_path = f"{STORAGE_ROOT_STR}/{user_id}/dataset/{filename}"
 
             if not os.path.exists(file_path):
                 raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")

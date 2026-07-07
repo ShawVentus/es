@@ -10,6 +10,7 @@ from src.server.domain.services.models.garch_service import GARCHService
 from src.server.domain.services.models.var_service import VARVECMService
 from src.server.utils.request_context import get_current_user_id
 from src.server.utils.logger import logger
+from src.server.utils.storage_paths import STORAGE_ROOT_STR
 import json
 import numpy as np
 from scipy.stats import jarque_bera
@@ -100,9 +101,9 @@ def _load_data(
     filename_decoded = unquote(filename)
 
     # 优先从processed目录加载，若不存在则从dataset加载
-    file_path = f"/root/librechat_user_data/{user_id}/processed/{filename_decoded}"
+    file_path = f"{STORAGE_ROOT_STR}/{user_id}/processed/{filename_decoded}"
     if not os.path.exists(file_path):
-        file_path = f"/root/librechat_user_data/{user_id}/dataset/{filename_decoded}"
+        file_path = f"{STORAGE_ROOT_STR}/{user_id}/dataset/{filename_decoded}"
 
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"文件不存在: {filename_decoded}（用户: {user_id}）")
@@ -342,6 +343,32 @@ def _run_residual_tests(residuals: List[float]) -> dict:
 
     return tests
 
+def _sanitize_for_json(data):
+    """Recursively convert numpy/pandas values to JSON-safe Python values."""
+    if isinstance(data, dict):
+        return {str(k): _sanitize_for_json(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_sanitize_for_json(item) for item in data]
+    if isinstance(data, tuple):
+        return [_sanitize_for_json(item) for item in data]
+    if isinstance(data, np.integer):
+        return int(data)
+    if isinstance(data, np.floating):
+        if np.isnan(data) or np.isinf(data):
+            return None
+        return float(data)
+    if isinstance(data, np.ndarray):
+        return _sanitize_for_json(data.tolist())
+    if isinstance(data, pd.Series):
+        return _sanitize_for_json(data.tolist())
+    if isinstance(data, pd.DataFrame):
+        return _sanitize_for_json(data.to_dict())
+    if isinstance(data, float):
+        if np.isnan(data) or np.isinf(data):
+            return None
+        return data
+    return data
+
 def _save_model_result(result: dict, model_type: str, user_id: str) -> tuple:
     """
     保存模型结果到report文件夹
@@ -353,14 +380,30 @@ def _save_model_result(result: dict, model_type: str, user_id: str) -> tuple:
     timestamp = int(time.time())
     report_id = f"{model_type.lower()}_{timestamp}"
 
-    # 创建报告文件夹: /root/librechat_user_data/{user_id}/reports/{report_id}/
-    report_dir = f"/root/librechat_user_data/{user_id}/reports/{report_id}"
+    # 创建报告文件夹: $LIBRECHAT_USER_DATA_DIR/{user_id}/reports/{report_id}/
+    report_dir = f"{STORAGE_ROOT_STR}/{user_id}/reports/{report_id}"
     os.makedirs(report_dir, exist_ok=True)
+
+    safe_result = _sanitize_for_json(result)
 
     # 保存模型结果JSON到报告文件夹
     model_json_path = os.path.join(report_dir, "model_result.json")
     with open(model_json_path, 'w', encoding='utf-8') as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+        json.dump(safe_result, f, ensure_ascii=False, indent=2)
+
+    # 报告列表/详情依赖 meta.json；模型成功后即生成最小可用元数据。
+    meta = {
+        "report_id": report_id,
+        "report_name": f"{model_type.upper()} 模型报告",
+        "model_type": model_type.upper(),
+        "data_source": safe_result.get("model_name", "-"),
+        "created_at": timestamp,
+        "status": "active",
+        "metrics": safe_result.get("metrics", {}),
+    }
+    meta_path = os.path.join(report_dir, "meta.json")
+    with open(meta_path, 'w', encoding='utf-8') as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
 
     return report_id, model_json_path
 

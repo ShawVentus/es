@@ -238,13 +238,30 @@ class ARIMAService:
             pvalues = result.pvalues
             param_names = result.param_names if hasattr(result, 'param_names') else [f'param_{i}' for i in range(len(params))]
             
+            bse = getattr(result, "bse", None)
+            tvalues = getattr(result, "tvalues", None)
+
+            def get_indexed_value(values, i):
+                if values is None:
+                    return None
+                return values[i] if isinstance(values, np.ndarray) else values.iloc[i]
+
+            def clean_numeric(value):
+                if value is None:
+                    return None
+                return float(value) if not np.isnan(value) and not np.isinf(value) else None
+
             coefficients = {}
             p_values = {}
+            standard_errors = {}
+            t_statistics = {}
             for i, name in enumerate(param_names):
                 val = params[i] if isinstance(params, np.ndarray) else params.iloc[i]
                 pval = pvalues[i] if isinstance(pvalues, np.ndarray) else pvalues.iloc[i]
-                coefficients[name] = float(val) if not np.isnan(val) else None
-                p_values[name] = float(pval) if not np.isnan(pval) else None
+                coefficients[name] = clean_numeric(val)
+                p_values[name] = clean_numeric(pval)
+                standard_errors[name] = clean_numeric(get_indexed_value(bse, i))
+                t_statistics[name] = clean_numeric(get_indexed_value(tvalues, i))
             
             # 计算R²
             valid_mask = [f is not None for f in full_fitted]

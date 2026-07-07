@@ -4,17 +4,20 @@ All modules should import logger via:
     from src.server.utils.logger import logger
 """
 import logging
+from pathlib import Path
 import sys
 import structlog
 
 
 def configure_logging(level: str = "INFO"):
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         handlers=[
             logging.StreamHandler(sys.stderr),
-            logging.FileHandler("logs/app.log", encoding="utf-8")
+            logging.FileHandler(log_dir / "app.log", encoding="utf-8")
         ]
     )
     structlog.configure(

@@ -8,6 +8,7 @@ import os
 from src.server.domain.services.data_preprocessing_service import DataPreprocessingService
 from src.server.utils.request_context import get_current_user_id
 from src.server.utils.logger import logger
+from src.server.utils.storage_paths import STORAGE_ROOT_STR
 
 router = APIRouter(prefix="/api/preprocessing", tags=["preprocessing"])
 
@@ -55,7 +56,7 @@ async def clean_data(request: CleanDataRequest):
         user_id = get_current_user_id() or "anonymous"
 
         # 读取原始数据
-        input_path = f"/root/librechat_user_data/{user_id}/dataset/{request.filename}"
+        input_path = f"{STORAGE_ROOT_STR}/{user_id}/dataset/{request.filename}"
         if not os.path.exists(input_path):
             raise HTTPException(status_code=404, detail=f"文件不存在: {request.filename}")
 
@@ -70,7 +71,7 @@ async def clean_data(request: CleanDataRequest):
         )
 
         # 保存清洗后的数据
-        output_dir = f"/root/librechat_user_data/{user_id}/processed"
+        output_dir = f"{STORAGE_ROOT_STR}/{user_id}/processed"
         os.makedirs(output_dir, exist_ok=True)
 
         # 文件名添加_cleaned后缀
@@ -112,7 +113,7 @@ async def transform_data(request: TransformRequest):
         user_id = get_current_user_id() or "anonymous"
 
         # 读取已清洗的数据
-        input_path = f"/root/librechat_user_data/{user_id}/processed/{request.filename}"
+        input_path = f"{STORAGE_ROOT_STR}/{user_id}/processed/{request.filename}"
         if not os.path.exists(input_path):
             raise HTTPException(status_code=404, detail=f"文件不存在: {request.filename}")
 
@@ -143,7 +144,7 @@ async def transform_data(request: TransformRequest):
 
         # 保存转换后的数据
         base_name = request.filename.replace('.csv', '')
-        output_path = f"/root/librechat_user_data/{user_id}/processed/{base_name}{suffix}.csv"
+        output_path = f"{STORAGE_ROOT_STR}/{user_id}/processed/{base_name}{suffix}.csv"
         transformed_df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
         logger.info(f"数据转换完成: {output_path}")
@@ -177,9 +178,9 @@ async def get_statistics(filename: str, value_col: str = "close_price"):
         user_id = get_current_user_id() or "anonymous"
 
         # 优先从dataset目录读取（原始数据），若不存在则从processed读取（预处理后数据）
-        file_path = f"/root/librechat_user_data/{user_id}/dataset/{filename}"
+        file_path = f"{STORAGE_ROOT_STR}/{user_id}/dataset/{filename}"
         if not os.path.exists(file_path):
-            file_path = f"/root/librechat_user_data/{user_id}/processed/{filename}"
+            file_path = f"{STORAGE_ROOT_STR}/{user_id}/processed/{filename}"
 
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")

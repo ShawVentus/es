@@ -235,12 +235,10 @@ Please follow these instructions when using tools from the respective MCP server
           ...(userIdentifier ? { 'X-User-Id': userIdentifier } : {}),
         };
         connection.setRequestHeaders(headers);
-        logger.info(`${logPrefix} 🔍 [DEBUG] 设置请求 headers:`, { headers, userIdentifier });
       } else if (userId) {
         // 即使没有配置headers，也注入X-User-Id
         const userIdentifier = user?.id || userId;
         connection.setRequestHeaders({ 'X-User-Id': userIdentifier });
-        logger.info(`${logPrefix} 🔍 [DEBUG] 设置 X-User-Id header:`, { userIdentifier });
       }
 
       const result = await connection.client.request(

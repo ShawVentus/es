@@ -20,6 +20,7 @@ Tags:
 - extended: 扩展工具标签
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastmcp import FastMCP
 from src.server.core.dependencies import Container
@@ -31,6 +32,16 @@ async def mcp_lifespan(mcp: FastMCP):
     """MCP server lifespan - manages Redis connection and adapters."""
     # Startup
     logger.info("🚀 Starting MCP server")
+
+    async def connect_with_timeout(name: str, connection, timeout: float = 5.0) -> bool:
+        try:
+            return await asyncio.wait_for(connection.connect(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning(f"⚠️ {name} connection timed out after {timeout}s - continuing without it")
+            return False
+        except Exception as e:
+            logger.warning(f"⚠️ {name} connection failed - continuing without it: {e}")
+            return False
 
     # Initialize Redis
     redis = Container.redis()
@@ -44,7 +55,7 @@ async def mcp_lifespan(mcp: FastMCP):
     tushare_available = False
     if config.tushare.is_available:
         tushare = Container.tushare()
-        tushare_available = await tushare.connect()
+        tushare_available = await connect_with_timeout("Tushare", tushare)
         if tushare_available:
             logger.info("✅ Tushare connection established")
         else:
@@ -56,16 +67,21 @@ async def mcp_lifespan(mcp: FastMCP):
     finnhub_available = False
     if config.finnhub.is_available:
         finnhub = Container.finnhub()
-        await finnhub.connect()
-        finnhub_available = True
-        logger.info("✅ FinnHub connection established")
+        finnhub_available = await connect_with_timeout("FinnHub", finnhub)
+        if finnhub_available:
+            logger.info("✅ FinnHub connection established")
+        else:
+            logger.warning("⚠️ FinnHub connection failed - continuing without it")
     else:
         logger.info("ℹ️  FinnHub disabled (set FINNHUB_ENABLED=True and provide API key to enable)")
 
     # Initialize Baostock connection
     baostock = Container.baostock()
-    await baostock.connect()
-    logger.info("✅ Baostock connection established")
+    baostock_available = await connect_with_timeout("Baostock", baostock)
+    if baostock_available:
+        logger.info("✅ Baostock connection established")
+    else:
+        logger.warning("⚠️ Baostock unavailable - Akshare/Yahoo/other adapters remain available")
 
     # Register adapters
     logger.info("📦 Registering data adapters...")
@@ -75,7 +91,8 @@ async def mcp_lifespan(mcp: FastMCP):
     if tushare_available:
         adapter_manager.register_adapter(Container.tushare_adapter())
     adapter_manager.register_adapter(Container.akshare_adapter())
-    adapter_manager.register_adapter(Container.baostock_adapter())
+    if baostock_available:
+        adapter_manager.register_adapter(Container.baostock_adapter())
 
     # 加密货币数据源
     adapter_manager.register_adapter(Container.crypto_adapter())

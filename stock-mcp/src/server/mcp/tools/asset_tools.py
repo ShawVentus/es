@@ -246,14 +246,12 @@ def register_asset_tools(mcp: FastMCP):
             
             # 从 FastMCP 的 http_request ContextVar 获取用户ID
             from src.server.utils.request_context import get_user_id_from_mcp_request
-            logger.error(f"🔍 [调试] 准备获取 user_id, prices 数量: {len(prices)}")
 
             user_id = get_user_id_from_mcp_request()
-            logger.error(f"🔍 [调试] get_user_id_from_mcp_request() 返回: {repr(user_id)}, type: {type(user_id)}")
 
             if not user_id:
                 raise ValueError("未授权：无法获取用户ID，请确保已通过 LibreChat 登录")
-            logger.info(f"✅ [MCP工具] 成功获取 user_id: {user_id}")
+            logger.debug("[MCP工具] 已解析用户ID并准备保存数据集")
 
             # 清洗数据：删除空值，规范化日期
             df_cleaned = clean_csv_for_storage(df)

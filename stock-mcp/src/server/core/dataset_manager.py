@@ -27,6 +27,8 @@ from typing import Dict, List, Any, Optional, Union
 import pandas as pd
 import numpy as np
 
+from src.server.utils.storage_paths import STORAGE_ROOT
+
 # 配置日志
 logger = logging.getLogger(__name__)
 
@@ -61,10 +63,7 @@ class DatasetManager:
     """
     
     # 基础数据目录（可通过环境变量覆盖）
-    BASE_DATA_DIR = os.getenv(
-        "LIBRECHAT_USER_DATA_DIR",
-        "/root/librechat_user_data"
-    )
+    BASE_DATA_DIR = str(STORAGE_ROOT)
     
     # 数据集子目录名称
     DATASET_SUBDIR = "dataset"
@@ -244,9 +243,7 @@ class DatasetManager:
             csv_path = user_dir / f"{safe_filename}.csv"
             meta_path = user_dir / f"{safe_filename}{self.META_SUFFIX}"
             
-            # 🔍 调试：输出完整路径
-            logger.info(f"🔍 [DEBUG] 保存数据集 - user_id: {user_id}")
-            logger.info(f"🔍 [DEBUG] 保存数据集 - 完整路径: {csv_path}")
+            _debug_log("保存数据集路径", user_id=user_id, csv_path=csv_path)
             
             # 保存 CSV
             df.to_csv(csv_path, index=False, encoding='utf-8')

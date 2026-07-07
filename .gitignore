@@ -1,0 +1,38 @@
+# Node/Python dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Frontend/build outputs
+frontend/node_modules/
+frontend/dist/
+LibreChat/node_modules/
+LibreChat/**/dist/
+stock-mcp/.venv/
+stock-mcp/logs/
+
+# Local env files
+.env
+.env.*
+!*.env.example
+LibreChat/.env
+frontend/.env
+stock-mcp/.env
+
+# Runtime logs and local service data
+deploy/logs/*
+!deploy/logs/status/
+!deploy/logs/status/*.status
+deploy/mongodb-data/
+deploy/data.ms/
+deploy/meili-data.ms/
+frontend/data.ms/
+librechat_user_data/
+dump.rdb
+7.7/
+
+# Browser/test artifacts
+.playwright-cli/
+output/

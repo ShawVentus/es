@@ -2,7 +2,7 @@
 购买记录管理器
 
 负责记录和查询用户的数据集购买状态
-存储路径: /root/librechat_user_data/{user_id}/purchases.json
+存储路径: $LIBRECHAT_USER_DATA_DIR/{user_id}/purchases.json
 
 创建日期: 2026-01-17
 """
@@ -10,8 +10,10 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Set
+from typing import List, Optional, Set
 from datetime import datetime
+
+from src.server.utils.storage_paths import STORAGE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +33,8 @@ def normalize_filename(filename: str) -> str:
 class PurchaseManager:
     """用户购买记录管理器"""
 
-    def __init__(self, base_dir: str = "/root/librechat_user_data"):
-        self.base_dir = Path(base_dir)
+    def __init__(self, base_dir: Optional[str] = None):
+        self.base_dir = Path(base_dir) if base_dir else STORAGE_ROOT
 
     def _get_user_purchase_file(self, user_id: str) -> Path:
         """获取用户购买记录文件路径"""

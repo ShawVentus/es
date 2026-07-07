@@ -21,7 +21,8 @@ const router = express.Router();
  * 存储根目录
  * 与stock-mcp的FileManager.STORAGE_ROOT保持一致
  */
-const STORAGE_ROOT = '/root/librechat_user_data';
+const STORAGE_ROOT =
+  process.env.LIBRECHAT_USER_DATA_DIR || path.resolve(process.cwd(), '..', 'librechat_user_data');
 
 /**
  * 格式化文件大小为可读格式

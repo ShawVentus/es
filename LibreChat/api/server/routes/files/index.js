@@ -51,13 +51,14 @@ const initialize = async () => {
   router.post('/images/agents/:agent_id/avatar', upload.single('file'));
   router.post('/images/assistants/:assistant_id/avatar', upload.single('file'));
 
-  router.use('/', files);
+  router.use('/dataset', dataset);  // 用户数据集文件列表API
+  router.use('/download', download); // 文件下载API
   router.use('/images', images);
   router.use('/images/avatar', avatar);
   router.use('/images/agents', agentAvatarRouter);
   router.use('/images/assistants', asstAvatarRouter);
-  router.use('/dataset', dataset);  // 用户数据集文件列表API
-  router.use('/download', download); // 文件下载API
+  // 通用文件路由包含 /:file_id，必须最后挂载，避免截获 /dataset、/download。
+  router.use('/', files);
   return router;
 };
 

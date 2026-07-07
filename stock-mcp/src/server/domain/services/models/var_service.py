@@ -53,7 +53,7 @@ class VARVECMService:
             if best_lag_aic < 1:
                 best_lag_aic = 1
 
-            return best_lag_aic
+            return int(best_lag_aic)
 
         except Exception as e:
             logger.warning(f"AIC选择滞后阶数失败: {e}，使用默认值1")
@@ -90,7 +90,7 @@ class VARVECMService:
                     test_data = df[[var2, var1]]
 
                     # Step 1: 使用AIC准则选择最优滞后阶数
-                    optimal_lag = self._select_granger_lag_by_aic(test_data, max_lag)
+                    optimal_lag = int(self._select_granger_lag_by_aic(test_data, max_lag))
 
                     # Step 2: 在最优滞后阶数下执行格兰杰因果检验
                     gc_result = grangercausalitytests(test_data, maxlag=[optimal_lag], verbose=False)
@@ -379,6 +379,8 @@ class VARVECMService:
             else:
                 selected_lag = lags
 
+            selected_lag = int(selected_lag)
+
             # 拟合模型
             result = model.fit(selected_lag)
 
@@ -424,7 +426,7 @@ class VARVECMService:
                 "variables": df_clean.columns.tolist(),
                 "n_variables": len(df_clean.columns),
                 "parameters": {
-                    col: result.params[col].to_dict()
+                    col: {str(k): float(v) for k, v in result.params[col].to_dict().items()}
                     for col in result.params.columns
                 },
                 "metrics": metrics,

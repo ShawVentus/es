@@ -11,7 +11,7 @@
 - QDII亚洲指数
 - 空气质量历史数据
 
-所有数据自动保存到用户隔离目录: /root/librechat_user_data/{user_id}/dataset/
+所有数据自动保存到用户隔离目录: $LIBRECHAT_USER_DATA_DIR/{user_id}/dataset/
 文件名采用中文命名,便于识别。
 """
 
@@ -23,6 +23,7 @@ from src.server.utils.logger import logger
 from src.server.utils.request_context import get_user_id_from_mcp_request
 from src.server.config.category_mapping import get_category
 from src.server.utils.data_cleaner import clean_csv_for_storage
+from src.server.utils.storage_paths import STORAGE_ROOT_STR
 import os
 import time
 
@@ -84,7 +85,7 @@ def _save_data(df: pd.DataFrame, function_name: str) -> str:
     )
     
     # 构建文件路径
-    base_dir = f"/root/librechat_user_data/{user_id}/dataset"
+    base_dir = f"{STORAGE_ROOT_STR}/{user_id}/dataset"
     file_path = os.path.join(base_dir, f"{chinese_name}.csv")
     
     if not result.get("success"):

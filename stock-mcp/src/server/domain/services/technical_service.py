@@ -83,6 +83,20 @@ class TechnicalService:
                 df = df.set_index("date")
 
             df = df.sort_index()
+            required_cols = [col for col in ["open", "high", "low", "close"] if col in df.columns]
+            if required_cols:
+                before_rows = len(df)
+                df = df.dropna(subset=required_cols)
+                dropped_rows = before_rows - len(df)
+                if dropped_rows:
+                    logger.info(
+                        f"Dropped {dropped_rows} incomplete OHLC rows for {symbol}"
+                    )
+
+            if df.empty:
+                logger.warning(f"No complete OHLC data found for {symbol}")
+                return None
+
             return df
 
         except Exception as e:
@@ -149,7 +163,7 @@ class TechnicalService:
         try:
             # Force fetch enough data for SMA200 regardless of requested period
             # Parse requested period to see if we need more
-            days_needed = 250  # Minimum for SMA200 + buffer
+            days_needed = 420  # Calendar-day buffer for 200+ trading sessions
             
             # Use the longer of requested period or needed days
             fetch_period = f"{days_needed}d"

@@ -1,0 +1,64 @@
+# EasySTAT local LibreChat configuration.
+# This file intentionally contains no secrets; model/API keys stay in LibreChat/.env.
+version: 1.2.1
+cache: true
+
+interface:
+  agents: true
+  mcpServers:
+    use: true
+    create: false
+    share: false
+  sidePanel: false
+  modelSelect: true
+  presets: false
+  parameters: false
+  bookmarks: false
+  prompts: false
+  multiConvo: false
+  memories: false
+
+mcpServers:
+  stock-mcp:
+    type: streamable-http
+    url: "http://127.0.0.1:9898/mcp"
+    chatMenu: true
+    initTimeout: 30000
+    timeout: 120000
+    headers:
+      # LibreChat expands this per authenticated user. stock-mcp uses it as the
+      # storage namespace: librechat_user_data/{LIBRECHAT_USER_ID}/...
+      X-User-Id: "{{LIBRECHAT_USER_ID}}"
+      X-User-Email: "{{LIBRECHAT_USER_EMAIL}}"
+    serverInstructions: |
+      这是 EasySTAT 的金融数据 MCP 服务。你可以使用它查询行情、下载历史价格、获取宏观/利率/外汇/债券/指数等数据，并把数据保存到当前 LibreChat 用户的数据集库。
+
+      使用规则：
+      - 查询实时价格时，使用标准 ticker，例如 NASDAQ:AAPL、SSE:600519、SZSE:000001、BINANCE:BTCUSDT。
+      - 用户要求“获取/保存/下载/采集数据”时，优先调用会保存数据集的工具，例如 get_historical_prices 或 AKShare 数据采集工具。
+      - 保存类工具必须传入清晰的中文 filename，不要带 .csv 后缀，例如“苹果近半年日线行情”、“贵州茅台2025年行情”。
+      - 服务会根据 X-User-Id 自动保存到当前用户隔离目录，保存后用户可在“我的数据”页面查看和下载。
+      - 如果某个外部数据源失败，报告部分结果并尝试等价 fallback，不要反复调用同一个失败源。
+
+mcpSettings:
+  allowedDomains:
+    - "localhost"
+    - "127.0.0.1"
+
+endpoints:
+  agents:
+    recursionLimit: 25
+    maxRecursionLimit: 50
+    maxCitations: 30
+    maxCitationsPerFile: 7
+    minRelevanceScore: 0.45
+    capabilities:
+      - "tools"
+      - "actions"
+      - "file_search"
+      - "execute_code"
+
+actions:
+  allowedDomains:
+    - "localhost"
+    - "127.0.0.1"

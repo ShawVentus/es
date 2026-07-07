@@ -29,6 +29,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Union
 
 from src.server.utils.logger import logger
+from src.server.utils.storage_paths import STORAGE_ROOT as DEFAULT_STORAGE_ROOT
 
 
 class FileManager:
@@ -43,7 +44,7 @@ class FileManager:
     """
     
     # 存储根目录：统一的用户数据存储位置，供Frontend后端访问
-    STORAGE_ROOT = Path("/root/librechat_user_data")
+    STORAGE_ROOT = DEFAULT_STORAGE_ROOT
     
     # 支持的文件格式
     SUPPORTED_FORMATS = {"json", "csv", "txt"}
@@ -63,8 +64,8 @@ class FileManager:
             category: 存储类别 ("temp" 临时文件, "dataset" 数据集)
         
         目录结构:
-            - temp: /root/librechat_user_data/{user_id}/temp/{session_id}/
-            - dataset: /root/librechat_user_data/{user_id}/dataset/
+            - temp: $LIBRECHAT_USER_DATA_DIR/{user_id}/temp/{session_id}/
+            - dataset: $LIBRECHAT_USER_DATA_DIR/{user_id}/dataset/
         """
         self.user_id = user_id or session_id or "anonymous"
         self.session_id = session_id

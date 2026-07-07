@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { resolveFrameTargetOrigin, safePostMessageToFrame } from '../../utils/iframeMessaging';
 
 // 用户信息类型
 interface LibreChatUser {
@@ -27,8 +28,10 @@ const log = (message: string, ...args: unknown[]) => {
 };
 
 // 常量定义
-// postMessage需要完整origin，而不是路径
-const AGENT_ORIGIN = window.location.origin;
+// postMessage 需要完整 origin，而不是路径；默认通过同源 /librechat 反代访问。
+const AGENT_URL = import.meta.env.VITE_AGENT_URL?.trim() || '/librechat/';
+const AGENT_ORIGIN = resolveFrameTargetOrigin(AGENT_URL);
+const AUTH_STATUS_QUERY = { type: 'QUERY_AUTH_STATUS' } as const;
 const LIBRECHAT_MESSAGE_PREFIX = 'LIBRECHAT_';
 
 /**
@@ -159,9 +162,9 @@ export function LibreChatAuthProvider({ children }: { children: React.ReactNode 
         log('Checking auth status...');
         const iframes = document.querySelectorAll<HTMLIFrameElement>('iframe[title*="Agent"]');
         iframes.forEach((iframe) => {
-            if (AGENT_ORIGIN) {
-                iframe.contentWindow?.postMessage({ type: 'QUERY_AUTH_STATUS' }, AGENT_ORIGIN);
-            }
+            safePostMessageToFrame(iframe, AUTH_STATUS_QUERY, AGENT_ORIGIN, (message, error) => {
+                log(message, error);
+            });
         });
     };
 

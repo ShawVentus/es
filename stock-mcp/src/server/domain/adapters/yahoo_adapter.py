@@ -77,6 +77,8 @@ class YahooAdapter(BaseDataAdapter):
                     Exchange.NYSE,
                     Exchange.AMEX,
                     Exchange.HKEX,
+                    Exchange.SSE,
+                    Exchange.SZSE,
                 },
             ),
             AdapterCapability(
@@ -86,7 +88,14 @@ class YahooAdapter(BaseDataAdapter):
                 asset_type=AssetType.INDEX, exchanges={Exchange.NASDAQ, Exchange.NYSE}
             ),
             AdapterCapability(
-                asset_type=AssetType.CRYPTO, exchanges={Exchange.CRYPTO}
+                asset_type=AssetType.CRYPTO,
+                exchanges={
+                    Exchange.CRYPTO,
+                    Exchange.BINANCE,
+                    Exchange.OKX,
+                    Exchange.COINBASE,
+                    Exchange.KRAKEN,
+                },
             ),
         ]
 
@@ -96,7 +105,6 @@ class YahooAdapter(BaseDataAdapter):
             AssetType.STOCK,
             AssetType.ETF,
             AssetType.INDEX,
-            AssetType.FOREX,
             AssetType.CRYPTO,  # Add support for Crypto
         ]
 
@@ -112,15 +120,18 @@ class YahooAdapter(BaseDataAdapter):
         exchange, symbol = ticker.split(":", 1)
         
         # Handle Crypto
-        if exchange == "CRYPTO":
-            # Convert BTC/USDT -> BTC-USD
-            if "/" in symbol:
-                base, quote = symbol.split("/")
-                # Yahoo uses USD for most crypto pairs
+        if exchange in {"CRYPTO", "BINANCE", "OKX", "COINBASE", "KRAKEN"}:
+            # Convert BTC/USDT, BTC-USDT or BTCUSDT -> BTC-USD.
+            normalized = symbol.upper().replace("-", "/")
+            if "/" in normalized:
+                base, quote = normalized.split("/", 1)
                 if quote in ["USDT", "USDC", "USD"]:
                     return f"{base}-USD"
                 return f"{base}-{quote}"
-            return f"{symbol}-USD"
+            for quote in ("USDT", "USDC", "USD"):
+                if normalized.endswith(quote) and len(normalized) > len(quote):
+                    return f"{normalized[: -len(quote)]}-USD"
+            return f"{normalized}-USD"
 
         # Handle US stocks (no suffix)
         if exchange in ["NASDAQ", "NYSE", "AMEX", "US"]:
@@ -379,7 +390,18 @@ class YahooAdapter(BaseDataAdapter):
         cache_key = f"yahoo:history:{ticker_norm}:{start_str}:{end_str}:{interval}"
         cached = await self.cache.get(cache_key)
         if cached:
-            return [AssetPrice.from_dict(item) for item in cached]
+            prices = [AssetPrice.from_dict(item) for item in cached]
+            # Older cache entries or Yahoo edge cases may contain incomplete OHLC rows.
+            valid_prices = [
+                p for p in prices
+                if all(
+                    value is not None
+                    for value in (p.price, p.open_price, p.high_price, p.low_price, p.close_price)
+                )
+            ]
+            if len(valid_prices) != len(prices):
+                await self.cache.set(cache_key, [p.to_dict() for p in valid_prices], ttl=3600)
+            return valid_prices
 
         try:
             ticker_obj = await self._run(yf.Ticker, ticker_norm)
@@ -395,17 +417,30 @@ class YahooAdapter(BaseDataAdapter):
             if hist.empty:
                 return []
 
+            currency = "USD"
+            if ticker.startswith(("SSE:", "SZSE:")):
+                currency = "CNY"
+            elif ticker.startswith("HKEX:"):
+                currency = "HKD"
+
             prices = []
+            required_cols = ["Open", "High", "Low", "Close"]
             for idx, row in hist.iterrows():
+                # Yahoo sometimes returns a latest row with NaN OHLC for CN markets;
+                # skip incomplete candles so downstream indicators and price snapshots
+                # never expose null current/open/high/low values.
+                if any(pd.isna(row.get(col)) for col in required_cols):
+                    continue
+
                 # idx is Timestamp
                 timestamp = idx.to_pydatetime()
 
                 price = AssetPrice(
                     ticker=ticker,
                     price=Decimal(str(row["Close"])),
-                    currency="USD",  # Default, might need to fetch from info
+                    currency=currency,
                     timestamp=timestamp,
-                    volume=Decimal(str(row["Volume"])),
+                    volume=Decimal(str(row.get("Volume", 0) or 0)),
                     open_price=Decimal(str(row["Open"])),
                     high_price=Decimal(str(row["High"])),
                     low_price=Decimal(str(row["Low"])),

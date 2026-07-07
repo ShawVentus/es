@@ -7,7 +7,7 @@
 - 人民币牌价数据
 - 人民币外汇远掉报价
 
-所有数据自动保存到用户隔离目录: /root/librechat_user_data/{user_id}/dataset/
+所有数据自动保存到用户隔离目录: $LIBRECHAT_USER_DATA_DIR/{user_id}/dataset/
 文件名采用中文命名,便于识别。
 """
 
@@ -18,6 +18,7 @@ from fastmcp import FastMCP
 from src.server.utils.logger import logger
 from src.server.utils.request_context import get_user_id_from_mcp_request
 from src.server.utils.data_cleaner import clean_csv_for_storage
+from src.server.utils.storage_paths import STORAGE_ROOT_STR
 import os
 import time
 
@@ -56,7 +57,7 @@ def _save_data(df: pd.DataFrame, function_name: str) -> str:
 
     # 生成文件路径
     chinese_name = CHINESE_NAME_MAP.get(function_name, function_name)
-    base_dir = f"/root/librechat_user_data/{user_id}/dataset"
+    base_dir = f"{STORAGE_ROOT_STR}/{user_id}/dataset"
     os.makedirs(base_dir, exist_ok=True)
 
     file_path = os.path.join(base_dir, f"{chinese_name}.csv")

@@ -14,7 +14,8 @@ const { logger } = require('~/config');
 const router = express.Router();
 
 // 存储根目录 (需与stock-mcp保持一致)
-const STORAGE_ROOT = '/root/librechat_user_data';
+const STORAGE_ROOT =
+  process.env.LIBRECHAT_USER_DATA_DIR || path.resolve(process.cwd(), '..', 'librechat_user_data');
 
 /**
  * 验证文件名是否安全 (防止目录遍历)

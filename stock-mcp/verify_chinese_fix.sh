@@ -8,13 +8,18 @@ echo "Matplotlib中文字体修复验证"
 echo "=========================================="
 echo ""
 
-# 激活conda环境
-source ~/.bashrc
-conda activate stock-mcp
+# 使用项目内 venv（不依赖 conda）
+cd "$(dirname "$0")"
+PYTHON_BIN="${STOCK_MCP_PYTHON:-$(pwd)/.venv/bin/python}"
+if [ ! -x "$PYTHON_BIN" ]; then
+  echo "stock-mcp Python not found: $PYTHON_BIN" >&2
+  echo "Run: STOCK_MCP_BASE_PYTHON=/path/to/python3.11 bash ../deploy/setup.sh" >&2
+  exit 1
+fi
 
 # 运行测试
 echo "运行测试脚本..."
-python test_chinese_font.py 2>&1 | grep -E "成功|失败|总计|图片保存目录" | tail -20
+"$PYTHON_BIN" test_chinese_font.py 2>&1 | grep -E "成功|失败|总计|图片保存目录" | tail -20
 
 echo ""
 echo "=========================================="

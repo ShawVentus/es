@@ -22,7 +22,7 @@ class ReportGenerator:
         初始化报告生成器
 
         Args:
-            report_dir: 单个报告的目录路径 (/root/librechat_user_data/{user_id}/reports/{report_id}/)
+            report_dir: 单个报告的目录路径 ($LIBRECHAT_USER_DATA_DIR/{user_id}/reports/{report_id}/)
         """
         self.report_dir = report_dir
         os.makedirs(report_dir, exist_ok=True)
@@ -433,7 +433,9 @@ class ReportGenerator:
         import json
         import time
         meta_path = os.path.join(self.report_dir, "meta.json")
+        report_id = os.path.basename(os.path.normpath(self.report_dir))
         meta_data = {
+            "report_id": report_id,
             "model_type": model_type,
             "data_source": data_source_info.get('name', '-'),
             "created_at": int(time.time()),

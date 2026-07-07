@@ -14,6 +14,7 @@ Architecture:
 - /redoc     -> ReDoc documentation
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +24,7 @@ from src.server.core.health import router as health_router
 from src.server.api.routes import market_data_router, filings_router
 from src.server.core.dependencies import Container
 from src.server.utils.logger import logger
-from src.server.utils.request_context import set_current_user_id, clear_current_user_id, get_current_user_id
+from src.server.utils.request_context import set_current_user_id, clear_current_user_id
 from src.server.utils.user_id_resolver import get_user_id_resolver
 
 
@@ -43,11 +44,6 @@ class UserIdMiddleware(BaseHTTPMiddleware):
         # 2. 从Authorization header提取JWT token
         auth_header = request.headers.get('Authorization')
         
-        # 🔍 调试：输出所有请求头
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] 请求路径: {request.url.path}")
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] X-User-Id: {user_id_from_header}")
-        logger.info(f"[UserIdMiddleware] 🔍 [DEBUG] Authorization: {'Bearer ...' if auth_header else 'None'}")
-        
         # 3. 尝试从JWT提取邮箱并注册映射（用于日志和其他用途）
         resolved_email = None
         if auth_header and user_id_from_header:
@@ -66,16 +62,12 @@ class UserIdMiddleware(BaseHTTPMiddleware):
         if final_user_id:
             set_current_user_id(final_user_id)
 
-            # 🔍 验证：立即读取确认是否设置成功
-            verify_read = get_current_user_id()
-            logger.error(f"[验证-主中间件] set后立即读取: {repr(verify_read)}, 原值: {repr(final_user_id)}, 匹配: {verify_read == final_user_id}")
-
             if resolved_email:
-                logger.info(f"[UserIdMiddleware] ✅ 使用 ObjectId: {final_user_id} (邮箱: {resolved_email})")
+                logger.debug("[UserIdMiddleware] 已解析 ObjectId 用户上下文")
             else:
-                logger.info(f"[UserIdMiddleware] ✅ 使用用户ID: {final_user_id}")
+                logger.debug("[UserIdMiddleware] 已解析用户上下文")
         else:
-            logger.warning(f"[UserIdMiddleware] ⚠️ 未找到X-User-Id请求头！")
+            logger.debug("[UserIdMiddleware] 未找到 X-User-Id 请求头")
         
         # contextvars会自动管理生命周期，无需手动清除
         # 这确保异步执行的MCP工具能够正确获取用户ID
@@ -106,7 +98,7 @@ def create_app():
                 user_id = request.headers.get('X-User-Id')
                 if user_id:
                     set_current_user_id(user_id)
-                    logger.debug(f"[MCPUserIdInjector] 设置 user_id: {user_id}")
+                    logger.debug("[MCPUserIdInjector] 已设置用户上下文")
                 try:
                     return await call_next(request)
                 finally:
@@ -126,6 +118,16 @@ def create_app():
         # Startup
         logger.info("🚀 Starting application")
 
+        async def connect_with_timeout(name: str, connection, timeout: float = 5.0) -> bool:
+            try:
+                return await asyncio.wait_for(connection.connect(), timeout=timeout)
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️ {name} connection timed out after {timeout}s - continuing without it")
+                return False
+            except Exception as e:
+                logger.warning(f"⚠️ {name} connection failed - continuing without it: {e}")
+                return False
+
         # Initialize Redis
         redis = Container.redis()
         await redis.connect()
@@ -138,7 +140,7 @@ def create_app():
         tushare_available = False
         if config.tushare.is_available:
             tushare = Container.tushare()
-            tushare_available = await tushare.connect()
+            tushare_available = await connect_with_timeout("Tushare", tushare)
             if tushare_available:
                 logger.info("✅ Tushare connection established")
             else:
@@ -150,16 +152,21 @@ def create_app():
         finnhub_available = False
         if config.finnhub.is_available:
             finnhub = Container.finnhub()
-            await finnhub.connect()
-            finnhub_available = True
-            logger.info("✅ FinnHub connection established")
+            finnhub_available = await connect_with_timeout("FinnHub", finnhub)
+            if finnhub_available:
+                logger.info("✅ FinnHub connection established")
+            else:
+                logger.warning("⚠️ FinnHub connection failed - continuing without it")
         else:
             logger.info("ℹ️  FinnHub disabled (set FINNHUB_ENABLED=True and provide API key to enable)")
 
         # Initialize Baostock connection
         baostock = Container.baostock()
-        await baostock.connect()
-        logger.info("✅ Baostock connection established")
+        baostock_available = await connect_with_timeout("Baostock", baostock)
+        if baostock_available:
+            logger.info("✅ Baostock connection established")
+        else:
+            logger.warning("⚠️ Baostock unavailable - Akshare/Yahoo/other adapters remain available")
 
         # Register adapters
         logger.info("📦 Registering data adapters...")
@@ -169,7 +176,8 @@ def create_app():
         if tushare_available:
             adapter_manager.register_adapter(Container.tushare_adapter())
         adapter_manager.register_adapter(Container.akshare_adapter())
-        adapter_manager.register_adapter(Container.baostock_adapter())
+        if baostock_available:
+            adapter_manager.register_adapter(Container.baostock_adapter())
 
         # 加密货币数据源
         adapter_manager.register_adapter(Container.crypto_adapter())

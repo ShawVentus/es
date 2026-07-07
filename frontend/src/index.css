@@ -52,3 +52,76 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
+
+/*
+ * 本地图标 fallback：替代原 Remix Icon CDN。
+ * 目标是离线/内网环境不再依赖 cdnjs，同时保持现有 <i class="ri-*"> 布局不破碎。
+ * 如果后续要恢复完整矢量图标，可改为打包本地字体文件，而不要引用外部 CDN。
+ */
+[class^='ri-'],
+[class*=' ri-'] {
+  --ri-icon: '•';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  min-width: 1em;
+  height: 1em;
+  line-height: 1;
+  font-style: normal;
+  font-family: 'Segoe UI Symbol', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  vertical-align: -0.125em;
+}
+
+[class^='ri-']::before,
+[class*=' ri-']::before {
+  content: var(--ri-icon);
+}
+
+.ri-add-line { --ri-icon: '+'; }
+.ri-alert-line { --ri-icon: '⚠'; }
+.ri-arrow-left-line,
+.ri-arrow-left-s-line { --ri-icon: '←'; }
+.ri-arrow-right-line,
+.ri-arrow-right-s-line { --ri-icon: '→'; }
+.ri-arrow-up-down-line { --ri-icon: '↕'; }
+.ri-brain-line { --ri-icon: '🧠'; }
+.ri-calendar-line { --ri-icon: '□'; }
+.ri-check-line,
+.ri-checkbox-circle-fill { --ri-icon: '✓'; }
+.ri-close-line { --ri-icon: '×'; }
+.ri-database-2-line { --ri-icon: '▣'; }
+.ri-delete-bin-line { --ri-icon: '⌫'; }
+.ri-download-line { --ri-icon: '↓'; }
+.ri-edit-line { --ri-icon: '✎'; }
+.ri-error-warning-line,
+.ri-file-warning-line { --ri-icon: '⚠'; }
+.ri-eye-line { --ri-icon: '◉'; }
+.ri-file-chart-line,
+.ri-file-list-3-line { --ri-icon: '▤'; }
+.ri-function-line { --ri-icon: 'ƒ'; }
+.ri-git-branch-line { --ri-icon: '⑂'; }
+.ri-grid-line { --ri-icon: '▦'; }
+.ri-home-4-line { --ri-icon: '⌂'; }
+.ri-inbox-line { --ri-icon: '▱'; }
+.ri-information-line { --ri-icon: 'i'; }
+.ri-lightbulb-line { --ri-icon: '💡'; }
+.ri-line-chart-line,
+.ri-pulse-line,
+.ri-stock-line { --ri-icon: '⌁'; }
+.ri-links-line,
+.ri-share-line { --ri-icon: '↗'; }
+.ri-list-check { --ri-icon: '☑'; }
+.ri-loader-4-line,
+.ri-refresh-line { --ri-icon: '↻'; }
+.ri-message-3-line { --ri-icon: '✉'; }
+.ri-more-2-fill { --ri-icon: '⋮'; }
+.ri-notification-3-line { --ri-icon: '◌'; }
+.ri-play-circle-line { --ri-icon: '▶'; }
+.ri-robot-line { --ri-icon: '◇'; }
+.ri-rocket-line { --ri-icon: '▲'; }
+.ri-save-line { --ri-icon: '✓'; }
+.ri-search-line { --ri-icon: '⌕'; }
+.ri-settings-3-line { --ri-icon: '⚙'; }
+.ri-table-line { --ri-icon: '▦'; }
+.ri-upload-cloud-line { --ri-icon: '↑'; }

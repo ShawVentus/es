@@ -326,12 +326,20 @@ export class MCPConnection extends EventEmitter {
         }
       }
 
+      const mergedHeaders: Record<string, string> = { ...initHeaders };
+      for (const [key, value] of Object.entries(requestHeaders)) {
+        const existingKey = Object.keys(mergedHeaders).find(
+          (headerKey) => headerKey.toLowerCase() === key.toLowerCase(),
+        );
+        if (existingKey) {
+          delete mergedHeaders[existingKey];
+        }
+        mergedHeaders[key] = value;
+      }
+
       return undiciFetch(input, {
         ...init,
-        headers: {
-          ...initHeaders,
-          ...requestHeaders,
-        },
+        headers: mergedHeaders,
         dispatcher: agent,
       });
     };
@@ -460,9 +468,6 @@ export class MCPConnection extends EventEmitter {
 
           /** Add OAuth token to headers if available */
           const headers = { ...options.headers };
-          // 🔍 临时调试：查看options.headers是否包含X-User-Id
-          logger.info(`${this.getLogPrefix()} [DEBUG] options.headers:`, JSON.stringify(options.headers));
-          logger.info(`${this.getLogPrefix()} [DEBUG] merged headers:`, JSON.stringify(headers));
           if (this.oauthTokens?.access_token) {
             headers['Authorization'] = `Bearer ${this.oauthTokens.access_token}`;
           }

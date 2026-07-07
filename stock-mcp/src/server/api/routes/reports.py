@@ -9,6 +9,7 @@ import json
 from src.server.domain.services.report_generator import ReportGenerator
 from src.server.utils.request_context import get_current_user_id
 from src.server.utils.logger import logger
+from src.server.utils.storage_paths import STORAGE_ROOT_STR
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -28,7 +29,7 @@ async def generate_report(request: ReportRequest):
         user_id = get_current_user_id() or "anonymous"
 
         # 报告目录路径（模型结果已在此目录）
-        report_dir = f"/root/librechat_user_data/{user_id}/reports/{request.report_id}"
+        report_dir = f"{STORAGE_ROOT_STR}/{user_id}/reports/{request.report_id}"
 
         if not os.path.exists(report_dir):
             raise HTTPException(status_code=404, detail=f"报告目录不存在: {request.report_id}")
@@ -68,7 +69,7 @@ async def list_reports():
     """获取用户所有报告列表"""
     try:
         user_id = get_current_user_id() or "anonymous"
-        reports_base_dir = f"/root/librechat_user_data/{user_id}/reports"
+        reports_base_dir = f"{STORAGE_ROOT_STR}/{user_id}/reports"
 
         if not os.path.exists(reports_base_dir):
             return {"success": True, "reports": []}
@@ -111,7 +112,7 @@ async def delete_report(report_id: str):
     """软删除报告（标记为已删除，不实际删除文件）"""
     try:
         user_id = get_current_user_id() or "anonymous"
-        report_dir = f"/root/librechat_user_data/{user_id}/reports/{report_id}"
+        report_dir = f"{STORAGE_ROOT_STR}/{user_id}/reports/{report_id}"
         meta_path = os.path.join(report_dir, "meta.json")
 
         if not os.path.exists(meta_path):
@@ -143,7 +144,7 @@ async def get_report_details(report_id: str):
     """获取报告详细信息（包含完整模型结果）"""
     try:
         user_id = get_current_user_id() or "anonymous"
-        report_dir = f"/root/librechat_user_data/{user_id}/reports/{report_id}"
+        report_dir = f"{STORAGE_ROOT_STR}/{user_id}/reports/{report_id}"
 
         # 读取meta.json
         meta_path = os.path.join(report_dir, "meta.json")
@@ -178,7 +179,7 @@ async def download_report(report_id: str):
     """下载报告DOCX文件"""
     try:
         user_id = get_current_user_id() or "anonymous"
-        file_path = f"/root/librechat_user_data/{user_id}/reports/{report_id}/report.docx"
+        file_path = f"{STORAGE_ROOT_STR}/{user_id}/reports/{report_id}/report.docx"
 
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="报告文件不存在")
