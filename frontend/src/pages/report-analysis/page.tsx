@@ -95,22 +95,17 @@ export default function ReportAnalysis() {
   // Save scroll position when unmounting or changing tabs/reports
   useEffect(() => {
     const container = scrollContainerRef.current;
-    console.log('🔍 [保存监听] container:', container);
     if (!container) {
-      console.error('❌ scrollContainerRef 为 null！');
       return;
     }
 
     const handleScroll = () => {
       const scrollPosition = container.scrollTop;
-      console.log('💾 [保存] scrollTop:', scrollPosition);
       sessionStorage.setItem('reportScrollPosition', scrollPosition.toString());
     };
 
     container.addEventListener('scroll', handleScroll);
-    console.log('✅ scroll监听器已绑定');
     return () => {
-      console.log('🗑️ scroll监听器已移除');
       container.removeEventListener('scroll', handleScroll);
     };
   }, []);
@@ -118,27 +113,19 @@ export default function ReportAnalysis() {
   // Restore scroll position when component mounts or tab changes
   useEffect(() => {
     const container = scrollContainerRef.current;
-    console.log('🔄 [恢复触发] activeTab:', activeTab, 'selectedReport:', selectedReport);
-    console.log('🔄 [恢复触发] container:', container);
 
     if (!container) {
-      console.error('❌ [恢复] container 为 null！');
       return;
     }
 
     // Only restore on summary tab (where the report content is)
     if (activeTab === 'summary') {
       const savedPosition = sessionStorage.getItem('reportScrollPosition');
-      console.log('💾 [恢复] sessionStorage值:', savedPosition);
-      console.log('📏 [恢复] scrollHeight:', container.scrollHeight, 'clientHeight:', container.clientHeight);
 
       if (savedPosition) {
         // Use setTimeout to ensure DOM is fully rendered
         setTimeout(() => {
-          console.log('⏰ [setTimeout] scrollHeight:', container.scrollHeight);
-          console.log('⏰ [setTimeout] 尝试设置scrollTop为:', savedPosition);
           container.scrollTop = parseInt(savedPosition, 10);
-          console.log('⏰ [setTimeout] 实际scrollTop:', container.scrollTop);
         }, 0);
       }
     }
