@@ -97,10 +97,12 @@ export function LibreChatAuthProvider({ children }: { children: React.ReactNode 
                     }
 
                     // 存储 user
-                    if (receivedUser) {
+                    if (receivedUser?.id) {
                         setUser(receivedUser);
                         localStorage.setItem('librechat_user', JSON.stringify(receivedUser));
                         log('User stored:', receivedUser);
+                    } else if (receivedUser) {
+                        log('Login payload ignored because user id is missing:', receivedUser);
                     }
 
                     log('User logged in');
@@ -120,14 +122,38 @@ export function LibreChatAuthProvider({ children }: { children: React.ReactNode 
                     const isAuth = !!authStatus;
                     setIsAuthenticated(isAuth);
                     localStorage.setItem('librechat_auth', String(isAuth));
+
+                    if (isAuth) {
+                        if (receivedToken) {
+                            setToken(receivedToken);
+                            localStorage.setItem('librechat_token', receivedToken);
+                            log('Token synced from auth status');
+                        }
+
+                        if (receivedUser?.id) {
+                            setUser(receivedUser);
+                            localStorage.setItem('librechat_user', JSON.stringify(receivedUser));
+                            log('User synced from auth status:', receivedUser);
+                        } else {
+                            log('Auth status is true but no user payload was received');
+                        }
+                    } else {
+                        setToken(null);
+                        setUser(null);
+                        localStorage.removeItem('librechat_token');
+                        localStorage.removeItem('librechat_user');
+                    }
+
                     log(`Auth status update: ${isAuth}`);
                     break;
 
                 case 'LIBRECHAT_TOKEN_EXPIRED':
                     setIsAuthenticated(false);
                     setToken(null);
+                    setUser(null);
                     localStorage.setItem('librechat_auth', 'false');
                     localStorage.removeItem('librechat_token');
+                    localStorage.removeItem('librechat_user');
                     log('Token expired');
                     break;
             }
