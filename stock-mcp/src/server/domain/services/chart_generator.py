@@ -17,27 +17,95 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ========== 配置中文字体（防御性编程）==========
-# 手动注册系统中的HeiTi字体
-HEITI_FONT_PATH = '/usr/share/fonts/truetype/heiti/HeiTi.ttf'
-if os.path.exists(HEITI_FONT_PATH):
-    try:
-        fm.fontManager.addfont(HEITI_FONT_PATH)
-        logger.info(f"✅ 已注册中文字体: {HEITI_FONT_PATH}")
-    except Exception as e:
-        logger.warning(f"⚠️ 注册字体失败: {e}")
+# Matplotlib 只会使用实际存在的字体；如果回退到 DejaVu Sans，中文会显示为方框。
+# 因此启动时先注册常见系统字体路径，再从 fontManager 中挑选可用字体。
+CHINESE_FONT_FILES = [
+    # Linux / Docker
+    '/usr/share/fonts/truetype/heiti/HeiTi.ttf',
+    '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf',
+    '/usr/share/fonts/truetype/arphic/uming.ttc',
+    # macOS
+    '/System/Library/Fonts/STHeiti Light.ttc',
+    '/System/Library/Fonts/STHeiti Medium.ttc',
+    '/System/Library/Fonts/Supplemental/Songti.ttc',
+    '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+    '/System/Library/Fonts/PingFang.ttc',
+    '/Library/Fonts/Arial Unicode.ttf',
+    # Windows（兼容本地开发）
+    'C:/Windows/Fonts/simhei.ttf',
+    'C:/Windows/Fonts/msyh.ttc',
+    'C:/Windows/Fonts/simsun.ttc',
+]
 
-# 配置字体回退链（按优先级）
-# 注意：HeiTi.ttf的实际字体名称是"经典平黑简"
-plt.rcParams['font.sans-serif'] = ['经典平黑简', 'WenQuanYi Zen Hei', 'SimHei', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+PREFERRED_CHINESE_FONTS = [
+    # macOS
+    'Heiti SC',
+    'Heiti TC',
+    'STHeiti',
+    'PingFang SC',
+    'Songti SC',
+    'Hiragino Sans GB',
+    'Arial Unicode MS',
+    # Linux / Docker
+    '经典平黑简',
+    'WenQuanYi Zen Hei',
+    'Noto Sans CJK SC',
+    'Noto Sans CJK JP',
+    'Noto Sans CJK TC',
+    'Source Han Sans SC',
+    'AR PL UMing CN',
+    # Windows
+    'Microsoft YaHei',
+    'SimHei',
+    'SimSun',
+]
 
-# 启动时验证中文字体是否可用
-available_fonts = {f.name for f in fm.fontManager.ttflist}
-chinese_fonts_found = [font for font in ['经典平黑简', 'WenQuanYi Zen Hei', 'SimHei'] if font in available_fonts]
-if chinese_fonts_found:
-    logger.info(f"✅ 中文字体配置成功，可用字体: {chinese_fonts_found[0]}")
-else:
-    logger.error(f"⚠️ 未找到任何中文字体！图表中的中文可能显示为方框。可用字体示例: {list(available_fonts)[:5]}")
+
+def _register_existing_font_files() -> None:
+    """手动注册常见中文字体文件，避免 Matplotlib 缓存没扫到系统字体。"""
+    for font_path in CHINESE_FONT_FILES:
+        if os.path.exists(font_path):
+            try:
+                fm.fontManager.addfont(font_path)
+                logger.info("已注册中文字体文件: %s", font_path)
+            except Exception as exc:
+                logger.warning("注册中文字体失败: %s (%s)", font_path, exc)
+
+
+def _select_chinese_fonts() -> List[str]:
+    """返回当前环境中 Matplotlib 可用的中文字体回退链。"""
+    available_fonts = {font.name for font in fm.fontManager.ttflist}
+    selected = [font for font in PREFERRED_CHINESE_FONTS if font in available_fonts]
+
+    # DejaVu Sans 保留为英文/符号兜底，但不能作为唯一字体。
+    selected.append('DejaVu Sans')
+
+    if selected[:-1]:
+        logger.info("中文字体配置成功，可用字体链: %s", selected[:-1])
+    else:
+        logger.error(
+            "未找到任何中文字体，图表中文可能显示为方框。请安装 fonts-wqy-zenhei "
+            "或 Noto Sans CJK；当前字体示例: %s",
+            list(sorted(available_fonts))[:10],
+        )
+
+    return selected
+
+
+_register_existing_font_files()
+CHINESE_FONT_FALLBACK = _select_chinese_fonts()
+
+
+def apply_chinese_font_settings() -> None:
+    """应用中文字体配置；每次 rcParams 被更新后都应重新调用。"""
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = CHINESE_FONT_FALLBACK
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+
+apply_chinese_font_settings()
 
 # 学术风格配置
 ACADEMIC_STYLE = {
@@ -71,8 +139,7 @@ class ChartGenerator:
         plt.rcParams.update(ACADEMIC_STYLE)
 
         # ⚠️ 关键：update()后必须重新设置中文字体，否则会被重置为默认值
-        plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei', 'DejaVu Sans']
-        plt.rcParams['axes.unicode_minus'] = False
+        apply_chinese_font_settings()
 
     def _save_figure(self, fig, filename: str) -> str:
         """保存图表"""
