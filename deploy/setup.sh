@@ -95,6 +95,19 @@ else
     log "Nginx 安装完成"
 fi
 
+# 2.2 安装中文字体（Matplotlib 报告图表需要）
+if ! command -v apt-get >/dev/null 2>&1; then
+    log "非 apt 环境，跳过中文字体自动安装；请确保系统存在 Heiti/PingFang/WenQuanYi/Noto CJK 等中文字体"
+elif fc-list :lang=zh >/dev/null 2>&1 && [ -n "$(fc-list :lang=zh 2>/dev/null | head -n 1)" ]; then
+    log "系统已检测到中文字体，跳过安装"
+else
+    log "安装中文字体包（用于报告图表中文显示）..."
+    apt-get update >> "$LOG_FILE" 2>&1
+    apt-get install -y fontconfig fonts-wqy-zenhei fonts-noto-cjk >> "$LOG_FILE" 2>&1
+    fc-cache -fv >> "$LOG_FILE" 2>&1 || true
+    log "中文字体安装完成"
+fi
+
 # 3. 创建 stock-mcp 项目内 venv（不使用 conda）
 cd "$STOCK_MCP_DIR"
 find_python() {
